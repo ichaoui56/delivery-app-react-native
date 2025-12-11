@@ -1,62 +1,35 @@
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
-import { useRouter } from 'expo-router';
 
-type OrderStatus = 'Pending' | 'In Progress' | 'Delivered' | 'Cancelled';
+type OrderStatus = 'Delivered' | 'Cancelled';
 
-interface Order {
-  id: string;
-  orderId: string;
-  customerName: string;
-  deliveryAddress: string;
-  status: OrderStatus;
-  estimatedDelivery: string;
-}
-
-const dummyOrders: Order[] = [
+const dummyHistory = [
   {
     id: '1',
-    orderId: 'ORD001',
-    customerName: 'John Doe',
-    deliveryAddress: '123 Main St, Anytown, USA',
-    status: 'Pending',
-    estimatedDelivery: '10:30 AM',
-  },
-  {
-    id: '2',
-    orderId: 'ORD002',
-    customerName: 'Jane Smith',
-    deliveryAddress: '456 Oak Ave, Anytown, USA',
-    status: 'In Progress',
-    estimatedDelivery: '11:00 AM',
-  },
-  {
-    id: '3',
     orderId: 'ORD003',
     customerName: 'Bob Johnson',
     deliveryAddress: '789 Pine Ln, Anytown, USA',
-    status: 'Delivered',
-    estimatedDelivery: '9:00 AM',
+    status: 'Delivered' as OrderStatus,
+    date: '2023-10-26',
   },
   {
-    id: '4',
+    id: '2',
     orderId: 'ORD004',
     customerName: 'Alice Williams',
     deliveryAddress: '101 Maple Dr, Anytown, USA',
-    status: 'Cancelled',
-    estimatedDelivery: '12:00 PM',
+    status: 'Cancelled' as OrderStatus,
+    date: '2023-10-25',
   },
 ];
 
-const OrdersScreen = () => {
-  const [filter, setFilter] = useState<OrderStatus>('Pending');
-  const router = useRouter();
+const HistoryScreen = () => {
+  const [filter, setFilter] = useState<OrderStatus>('Delivered');
 
-  const filteredOrders = dummyOrders.filter((order) => order.status === filter);
+  const filteredHistory = dummyHistory.filter((order) => order.status === filter);
 
-  const renderOrderItem = ({ item }: { item: Order }) => (
-    <TouchableOpacity style={styles.orderCard} onPress={() => router.push(`/order-details/${item.id}`)}>
+  const renderHistoryItem = ({ item }: { item: typeof dummyHistory[0] }) => (
+    <View style={styles.orderCard}>
       <View style={styles.cardHeader}>
         <Text style={styles.orderId}>{item.orderId}</Text>
         <Text style={[styles.status, getStatusStyle(item.status)]}>{item.status}</Text>
@@ -66,17 +39,13 @@ const OrdersScreen = () => {
         <Text style={styles.address}>{item.deliveryAddress}</Text>
       </View>
       <View style={styles.cardFooter}>
-        <Text style={styles.deliveryTime}>Est. Delivery: {item.estimatedDelivery}</Text>
+        <Text style={styles.date}>{item.date}</Text>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   const getStatusStyle = (status: OrderStatus) => {
     switch (status) {
-      case 'Pending':
-        return { backgroundColor: '#ffc107', color: '#fff' };
-      case 'In Progress':
-        return { backgroundColor: '#17a2b8', color: '#fff' };
       case 'Delivered':
         return { backgroundColor: '#28a745', color: '#fff' };
       case 'Cancelled':
@@ -89,22 +58,10 @@ const OrdersScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Orders</Text>
+        <Text style={styles.headerTitle}>Order history</Text>
       </View>
 
       <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterChip, filter === 'Pending' && styles.activeFilterChip]}
-          onPress={() => setFilter('Pending')}
-        >
-          <Text style={[styles.filterChipText, filter === 'Pending' && styles.activeFilterChipText]}>Pending</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterChip, filter === 'In Progress' && styles.activeFilterChip]}
-          onPress={() => setFilter('In Progress')}
-        >
-          <Text style={[styles.filterChipText, filter === 'In Progress' && styles.activeFilterChipText]}>In Progress</Text>
-        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.filterChip, filter === 'Delivered' && styles.activeFilterChip]}
           onPress={() => setFilter('Delivered')}
@@ -120,8 +77,8 @@ const OrdersScreen = () => {
       </View>
 
       <FlatList
-        data={filteredOrders}
-        renderItem={renderOrderItem}
+        data={filteredHistory}
+        renderItem={renderHistoryItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={<Text style={styles.emptyText}>No orders found</Text>}
@@ -219,9 +176,9 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     alignItems: 'flex-end',
   },
-  deliveryTime: {
+  date: {
     fontSize: 14,
-    color: '#0586b5',
+    color: '#666',
   },
   emptyText: {
     textAlign: 'center',
@@ -231,4 +188,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default OrdersScreen;
+export default HistoryScreen;
