@@ -5,7 +5,18 @@ import { apiAllOrders, type Order, type OrderStatus } from "@/lib/mobile-auth"
 import { MaterialCommunityIcons } from "@expo/vector-icons"
 import { useRouter } from "expo-router"
 import { useEffect, useMemo, useState } from "react"
-import { FlatList, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native"
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native"
 
 type FilterStatus = "all" | OrderStatus
 
@@ -14,18 +25,24 @@ const OrdersScreen = () => {
   const { token } = useAuth()
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
+  const [searchQuery, setSearchQuery] = useState("")
   const [orders, setOrders] = useState<Order[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
     const load = async () => {
-      if (!token) return
-      setLoading(true)
+      if (!token) {
+        setLoading(false)
+        return
+      }
       try {
+        // Simulate loading for better UX
+        await new Promise((resolve) => setTimeout(resolve, 1000))
         const res = await apiAllOrders(token)
         if (mounted) setOrders(res.orders || [])
-      } catch {
+      } catch (e) {
+        console.error("Failed to fetch orders:", e)
         if (mounted) setOrders([])
       } finally {
         if (mounted) setLoading(false)
@@ -38,178 +55,198 @@ const OrdersScreen = () => {
   }, [token])
 
   const filteredOrders = useMemo(() => {
-    if (filterStatus === "all") return orders
-    return orders.filter((order) => order.status === filterStatus)
-  }, [orders, filterStatus])
+    let filtered = orders
+    if (filterStatus !== "all") {
+      filtered = filtered.filter((order) => order.status === filterStatus)
+    }
+    if (searchQuery) {
+      const lowercasedQuery = searchQuery.toLowerCase()
+      filtered = filtered.filter(
+        (order) =>
+          order.orderCode.toLowerCase().includes(lowercasedQuery) ||
+          order.customerName.toLowerCase().includes(lowercasedQuery) ||
+          order.city.toLowerCase().includes(lowercasedQuery) ||
+          (order.merchant?.companyName || "").toLowerCase().includes(lowercasedQuery)
+      )
+    }
+    return filtered
+  }, [orders, filterStatus, searchQuery])
 
   const getStatusLabel = (status: OrderStatus) => {
-    switch (status) {
-      case "PENDING":
-        return "En attente"
-      case "ACCEPTED":
-        return "Acceptée"
-      case "ASSIGNED_TO_DELIVERY":
-        return "Assignée"
-      case "DELIVERED":
-        return "Livrée"
-      case "CANCELLED":
-        return "Annulée"
-      case "REPORTED":
-        return "Signalée"
-      case "REJECTED":
-        return "Rejetée"
-      default:
-        return status
+    const statusMap: Record<OrderStatus, string> = {
+      PENDING: "En attente",
+      ACCEPTED: "Acceptée",
+      ASSIGNED_TO_DELIVERY: "Assignée",
+      DELIVERED: "Livrée",
+      CANCELLED: "Annulée",
+      REPORTED: "Signalée",
+      REJECTED: "Rejetée",
     }
+    return statusMap[status] || status
   }
 
-  const getStatusColor = (status: OrderStatus) => {
+  const getStatusAppearance = (status: OrderStatus) => {
     switch (status) {
       case "PENDING":
-        return "#FFA500"
+        return { color: "#FFA500", icon: "clock-outline", bgColor: "#FFF7E6" }
       case "ACCEPTED":
       case "ASSIGNED_TO_DELIVERY":
-        return "#0f8fd5"
+        return { color: "#0f8fd5", icon: "truck-fast", bgColor: "#E3F2FD" }
       case "DELIVERED":
-        return "#28a745"
+        return { color: "#28a745", icon: "check-circle", bgColor: "#E8F5E9" }
       case "CANCELLED":
       case "REJECTED":
       case "REPORTED":
-        return "#dc3545"
+        return { color: "#dc3545", icon: "close-circle", bgColor: "#FDEDED" }
       default:
-        return "#666"
+        return { color: "#666", icon: "help-circle", bgColor: "#F0F0F0" }
     }
   }
 
-  const getStatusIcon = (status: OrderStatus) => {
-    switch (status) {
-      case "PENDING":
-        return "clock-outline"
-      case "ACCEPTED":
-      case "ASSIGNED_TO_DELIVERY":
-        return "truck-fast"
-      case "DELIVERED":
-        return "check-circle"
-      case "CANCELLED":
-        return "close-circle"
-      case "REPORTED":
-        return "alert-circle"
-      case "REJECTED":
-        return "close-circle"
-      default:
-        return "help-circle"
-    }
-  }
+  const OrderCard = ({ order }: { order: Order }) => {
+    const { color, icon, bgColor } = getStatusAppearance(order.status)
+    const productNames = order.orderItems.map((item) => item.product.name).join(", ")
+    const productImage = order.orderItems.length > 0 ? order.orderItems[0].product.image : null
 
-  const OrderCard = ({ order }: { order: Order }) => (
-    <TouchableOpacity
-      style={styles.orderCard}
-      onPress={() => router.push(`/order-details/${order.id}`)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.orderCardContent}>
-        <View style={styles.orderHeader}>
-          <View>
-            <Text style={styles.orderID}>{`#${order.id}`}</Text>
-            <Text style={styles.customerName} numberOfLines={1}>
-              {order.merchant?.companyName || order.merchant?.user?.name || ""}
+    return (
+      <TouchableOpacity
+        style={styles.orderCard}
+        onPress={() => router.push(`/order-details/${order.id}`)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.orderCardHeader}>
+          {productImage ? (
+            <Image source={{ uri: productImage }} style={styles.productImage} />
+          ) : (
+            <View style={styles.productImagePlaceholder}>
+              <MaterialCommunityIcons name="cube-outline" size={24} color="#999" />
+            </View>
+          )}
+          <View style={styles.orderCardTitle}>
+            <Text style={styles.orderCardProductName} numberOfLines={1}>
+              {productNames || "Commande"}
+            </Text>
+            <Text style={styles.orderCardId}>{order.orderCode}</Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: bgColor }]}>
+            <MaterialCommunityIcons name={icon as any} size={14} color={color} />
+            <Text style={[styles.statusText, { color }]}>{getStatusLabel(order.status)}</Text>
+          </View>
+        </View>
+
+        <View style={styles.orderCardBody}>
+          <View style={styles.infoRow}>
+            <MaterialCommunityIcons name="account-circle-outline" size={16} color="#666" />
+            <Text style={styles.infoText} numberOfLines={1}>
+              {order.customerName}
             </Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) + "20" }]}>
-            <MaterialCommunityIcons name={getStatusIcon(order.status)} size={14} color={getStatusColor(order.status)} />
-            <Text style={[styles.statusText, { color: getStatusColor(order.status) }]}> 
-              {getStatusLabel(order.status)}
+          <View style={styles.infoRow}>
+            <MaterialCommunityIcons name="map-marker-outline" size={16} color="#666" />
+            <Text style={styles.infoText} numberOfLines={1}>
+              {order.address}, {order.city}
             </Text>
           </View>
         </View>
 
-        <Text style={styles.address} numberOfLines={1}>
-          <MaterialCommunityIcons name="map-marker" size={12} color="#666" /> {order.city || ""}
-        </Text>
-
-        <View style={styles.orderFooter}>
-          <View style={styles.detailsRow}>
-            <Text style={styles.detailLabel}>
-              <MaterialCommunityIcons name="clock" size={12} color="#666" />
-              {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ""}
-            </Text>
-            <Text style={styles.detailLabel}>
-              <MaterialCommunityIcons name="store" size={12} color="#666" /> {order.orderItems?.length || 0} articles
-            </Text>
+        <View style={styles.orderCardFooter}>
+          <View style={styles.priceContainer}>
+            <Text style={styles.priceLabel}>Total:</Text>
+            <Text style={styles.price}>{order.totalPrice.toFixed(2)} MAD</Text>
           </View>
+          <Text style={styles.orderDate}>{new Date(order.createdAt).toLocaleDateString("fr-FR")}</Text>
         </View>
-      </View>
-    </TouchableOpacity>
-  )
+      </TouchableOpacity>
+    )
+  }
 
   const SkeletonCard = () => (
-    <View style={[styles.orderCard, styles.skeletonCard]}>
-      <View style={styles.skeletonLineLg} />
-      <View style={styles.skeletonLineSm} />
-      <View style={styles.skeletonLineMd} />
+    <View style={styles.skeletonCard}>
+      <View style={styles.skeletonHeader}>
+        <View style={styles.skeletonImage} />
+        <View style={styles.skeletonTitleContainer}>
+          <View style={styles.skeletonLineLg} />
+          <View style={styles.skeletonLineSm} />
+        </View>
+      </View>
+      <View style={styles.skeletonBody}>
+        <View style={styles.skeletonLineMd} />
+        <View style={styles.skeletonLineMd} />
+      </View>
+      <View style={styles.skeletonFooter}>
+        <View style={styles.skeletonLineSm} />
+        <View style={styles.skeletonLineSm} />
+      </View>
     </View>
   )
 
-  return (
-    <SafeAreaView style={styles.container}>
+  const ListHeader = () => (
+    <>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Toutes les commandes</Text>
-        <Text style={styles.headerSubtitle}>{filteredOrders.length} commandes</Text>
+        <Text style={styles.headerSubtitle}>Suivez et gérez vos commandes</Text>
       </View>
 
-      {/* Filter Buttons */}
+      <View style={styles.searchBar}>
+        <MaterialCommunityIcons name="magnify" size={20} color="#999" />
+        <TextInput
+          placeholder="Rechercher par #, client, ville..."
+          placeholderTextColor="#999"
+          style={styles.searchInput}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
       >
-        {([
-          "all",
-          "PENDING",
-          "ACCEPTED",
-          "ASSIGNED_TO_DELIVERY",
-          "DELIVERED",
-          "CANCELLED",
-          "REPORTED",
-          "REJECTED",
-        ] as FilterStatus[]).map((status) => (
+        {(["all", "PENDING", "ASSIGNED_TO_DELIVERY", "DELIVERED", "CANCELLED"] as FilterStatus[]).map((status) => (
           <TouchableOpacity
             key={status}
             style={[styles.filterButton, filterStatus === status && styles.filterButtonActive]}
             onPress={() => setFilterStatus(status)}
           >
             <Text style={[styles.filterButtonText, filterStatus === status && styles.filterButtonTextActive]}>
-              {status === "all" ? "Toutes" : getStatusLabel(status)}
+              {status === "all" ? "Toutes" : getStatusLabel(status as OrderStatus)}
             </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
+    </>
+  )
 
-      {/* Orders Grid - 2 per row */}
-      <FlatList
-        data={filteredOrders}
-        renderItem={({ item }) => <OrderCard order={item} />}
-        keyExtractor={(item) => String(item.id)}
-        numColumns={2}
-        columnWrapperStyle={styles.gridRow}
-        contentContainerStyle={styles.ordersGrid}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          loading ? (
-            <View style={styles.skeletonGrid}>
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-            </View>
-          ) : (
+  return (
+    <SafeAreaView style={styles.container}>
+      {loading ? (
+        <>
+          <ListHeader />
+          <ScrollView contentContainerStyle={styles.ordersGrid}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </ScrollView>
+        </>
+      ) : (
+        <FlatList
+          data={filteredOrders}
+          renderItem={({ item }) => <OrderCard order={item} />}
+          keyExtractor={(item) => String(item.id)}
+          ListHeaderComponent={<ListHeader />}
+          ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>Aucune commande</Text>
+              <MaterialCommunityIcons name="package-variant-closed" size={60} color="#D0D0D0" />
+              <Text style={styles.emptyStateText}>Aucune commande trouvée</Text>
+              <Text style={styles.emptyStateSubText}>Essayez d'ajuster vos filtres ou votre recherche.</Text>
             </View>
-          )
-        }
-      />
+          }
+          contentContainerStyle={styles.ordersGrid}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </SafeAreaView>
   )
 }
@@ -217,7 +254,7 @@ const OrdersScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F8F9FA",
   },
   header: {
     paddingHorizontal: 20,
@@ -231,25 +268,44 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   headerSubtitle: {
-    fontSize: 14,
-    color: "#0f8fd5",
-    fontWeight: "600",
+    fontSize: 16,
+    color: "#666",
   },
-  filterContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+  searchBar: {
+    flexDirection: "row",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 15,
+    paddingHorizontal: 15,
+    alignItems: "center",
+    marginHorizontal: 20,
+    marginTop: 15,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#1A1A1A",
+    marginLeft: 10,
+    height: 50,
+    fontSize: 16,
   },
   filterContent: {
-    flexDirection: "row",
-    gap: 8,
-    paddingRight: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 10,
   },
   filterButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: "#F0F0F0",
-    borderWidth: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
     borderColor: "#E0E0E0",
   },
   filterButtonActive: {
@@ -257,131 +313,192 @@ const styles = StyleSheet.create({
     borderColor: "#0f8fd5",
   },
   filterButtonText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: "600",
-    color: "#666",
+    color: "#333",
   },
   filterButtonTextActive: {
     color: "#FFFFFF",
   },
   ordersGrid: {
-    paddingHorizontal: 15,
+    paddingHorizontal: 20,
     paddingBottom: 20,
-  },
-  skeletonGrid: {
-    paddingHorizontal: 15,
-    paddingBottom: 20,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  skeletonCard: {
-    padding: 12,
-    marginHorizontal: 0,
-  },
-  skeletonLineLg: {
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: "#EDEDED",
-    marginBottom: 10,
-    width: "70%",
-  },
-  skeletonLineMd: {
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#EDEDED",
-    marginTop: 10,
-    width: "55%",
-  },
-  skeletonLineSm: {
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#EDEDED",
-    width: "90%",
-  },
-  gridRow: {
-    justifyContent: "space-between",
-    marginBottom: 12,
   },
   orderCard: {
-    flex: 1,
-    backgroundColor: "#F9F9F9",
-    borderRadius: 16,
-    marginHorizontal: 5,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 15,
+    marginBottom: 15,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowRadius: 10,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
   },
-  emptyState: {
-    paddingHorizontal: 20,
-    paddingVertical: 30,
+  orderCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  productImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    marginRight: 12,
+  },
+  productImagePlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    marginRight: 12,
+    backgroundColor: "#F0F0F0",
+    justifyContent: "center",
     alignItems: "center",
   },
-  emptyStateText: {
-    color: "#666",
-    fontWeight: "600",
+  orderCardTitle: {
+    flex: 1,
   },
-  orderCardContent: {
-    padding: 12,
-  },
-  orderHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 8,
-  },
-  orderID: {
-    fontSize: 13,
+  orderCardProductName: {
+    fontSize: 15,
     fontWeight: "bold",
-    color: "#0f8fd5",
+    color: "#1A1A1A",
     marginBottom: 2,
   },
-  customerName: {
+  orderCardId: {
     fontSize: 12,
+    color: "#0f8fd5",
     fontWeight: "600",
-    color: "#1A1A1A",
   },
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 5,
+    alignSelf: "flex-start",
   },
   statusText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "bold",
   },
-  address: {
-    fontSize: 11,
-    color: "#666",
-    marginBottom: 8,
+  orderCardBody: {
+    marginBottom: 12,
+    paddingLeft: 4,
   },
-  orderFooter: {
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  infoText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  orderCardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 8,
+    paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#E8E8E8",
+    borderTopColor: "#F0F0F0",
   },
-  detailsRow: {
+  priceContainer: {
     flexDirection: "row",
-    gap: 6,
+    alignItems: "center",
+    gap: 5,
   },
-  detailLabel: {
-    fontSize: 10,
+  priceLabel: {
+    fontSize: 13,
     color: "#666",
-    fontWeight: "500",
   },
   price: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: "bold",
-    color: "#0f8fd5",
+    color: "#1A1A1A",
+  },
+  orderDate: {
+    fontSize: 12,
+    color: "#666",
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    marginTop: 50,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#666",
+    marginTop: 15,
+    textAlign: "center",
+  },
+  emptyStateSubText: {
+    fontSize: 14,
+    color: "#999",
+    marginTop: 5,
+    textAlign: "center",
+  },
+  skeletonCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: "#F0F0F0",
+  },
+  skeletonHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  skeletonImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    marginRight: 12,
+    backgroundColor: "#E9ECEF",
+  },
+  skeletonTitleContainer: {
+    flex: 1,
+  },
+  skeletonLineLg: {
+    height: 16,
+    width: "70%",
+    marginBottom: 8,
+    backgroundColor: "#E9ECEF",
+    borderRadius: 4,
+  },
+  skeletonLineMd: {
+    height: 14,
+    width: "90%",
+    marginBottom: 6,
+    backgroundColor: "#E9ECEF",
+    borderRadius: 4,
+  },
+  skeletonLineSm: {
+    height: 12,
+    width: "50%",
+    backgroundColor: "#E9ECEF",
+    borderRadius: 4,
+  },
+  skeletonBody: {
+    marginBottom: 12,
+    paddingLeft: 4,
+    gap: 4,
+  },
+  skeletonFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F0F0",
   },
 })
 

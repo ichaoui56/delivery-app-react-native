@@ -4,8 +4,19 @@ import { useAuth } from "@/lib/auth-provider"
 import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
-import { FlatList, Image, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View, ActivityIndicator } from "react-native"
-import Svg, { Line, Path, Polyline } from "react-native-svg"
+import {
+  FlatList,
+  Image,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+  ScrollView,
+} from "react-native"
+import Svg, { Path, Circle } from "react-native-svg"
 import { apiLatestOrders, Order, OrderStatus as ApiOrderStatus, getAuthToken } from "@/lib/mobile-auth"
 
 // --- SVG Icons ---
@@ -27,7 +38,16 @@ const RefreshIcon = ({ size = 24, color = "#000000" }) => (
   </Svg>
 )
 
-const BoxIcon = ({ size = 24, color = "#0f8fd5" }) => (
+const SearchIcon = ({ size = 20, color = "#A0A0A0" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M15.5 14H14.71L14.43 13.73C15.41 12.59 16 11.11 16 9.5C16 5.91 13.09 3 9.5 3C5.91 3 3 5.91 3 9.5C3 13.09 5.91 16 9.5 16C11.11 16 12.59 15.41 13.73 14.43L14 14.71V15.5L19 20.49L20.49 19L15.5 14ZM9.5 14C7.01 14 5 11.99 5 9.5C5 7.01 7.01 5 9.5 5C11.99 5 14 7.01 14 9.5C14 11.99 11.99 14 9.5 14Z"
+      fill={color}
+    />
+  </Svg>
+)
+
+const MapPinIcon = ({ size = 16, color = "#FFFFFF" }) => (
   <Svg
     width={size}
     height={size}
@@ -38,30 +58,20 @@ const BoxIcon = ({ size = 24, color = "#0f8fd5" }) => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    <Path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-    <Polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-    <Line x1="12" y1="22.08" x2="12" y2="12" />
-  </Svg>
-)
-
-const SearchIcon = ({ size = 20, color = "#A0A0A0" }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M15.5 14H14.71L14.43 13.73C15.41 12.59 16 11.11 16 9.5C16 5.91 13.09 3 9.5 3C5.91 3 3 5.91 3 9.5C3 13.09 5.91 16 9.5 16C11.11 16 12.59 15.41 13.73 14.43L14 14.71V15.5L19 20.49L20.49 19L15.5 14ZM9.5 14C7.01 14 5 11.99 5 9.5C5 7.01 7.01 5 9.5 5C11.99 5 14 7.01 14 9.5C14 11.99 11.99 14 9.5 14Z"
-      fill={color}
-    />
+    <Path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+    <Circle cx="12" cy="10" r="3" />
   </Svg>
 )
 
 // --- Interfaces ---
-type ShipmentStatus = "Tous" | "En attente" | "En cours" | "Livré"
+type ShipmentStatus = "Tous" | "En attente" | "En cours" | "Livré" | "Annulé" | "Reporté"
 
 // --- Light Theme Colors ---
 const LIGHT_COLORS = {
-  background: "#FFFFFF",
+  background: "#F0F4F8",
   text: "#1A1A1A",
   icon: "#808080",
-  card: "#F9F9F9",
+  card: "#FFFFFF",
   border: "#E0E0E0",
   primary: "#0f8fd5",
   secondary: "#F3F4F6",
@@ -70,15 +80,19 @@ const LIGHT_COLORS = {
 // Helper function to map API status to display status
 const mapApiStatusToDisplayStatus = (status: ApiOrderStatus): ShipmentStatus => {
   switch (status) {
-    case 'PENDING':
-    case 'ACCEPTED':
-      return 'En attente'
-    case 'ASSIGNED_TO_DELIVERY':
-      return 'En cours'
-    case 'DELIVERED':
-      return 'Livré'
+    case "PENDING":
+    case "ACCEPTED":
+      return "En attente"
+    case "ASSIGNED_TO_DELIVERY":
+      return "En cours"
+    case "DELIVERED":
+      return "Livré"
+    case "CANCELLED":
+      return "Annulé"
+    case "REPORTED":
+      return "Reporté"
     default:
-      return 'En attente'
+      return "En attente"
   }
 }
 
@@ -88,20 +102,20 @@ const formatDate = (dateString: string): string => {
   const now = new Date()
   const diffTime = Math.abs(now.getTime() - date.getTime())
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-  
+
   if (diffDays === 0) {
-    return `Aujourd'hui, ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+    return `Aujourd\'hui, ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
   } else if (diffDays === 1) {
-    return `Hier, ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+    return `Hier, ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
   } else {
-    return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
   }
 }
 
 // Helper function to get product names from order
 const getOrderProductNames = (order: Order): string => {
-  const productNames = order.orderItems.map(item => item.product.name)
-  if (productNames.length === 0) return 'Commande'
+  const productNames = order.orderItems.map((item) => item.product.name)
+  if (productNames.length === 0) return "Commande"
   if (productNames.length === 1) return productNames[0]
   return `${productNames[0]} +${productNames.length - 1} autres`
 }
@@ -118,13 +132,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
-  // Get user's first name or default to "Utilisateur"
-  const firstName = user?.name?.split(' ')[0] || 'Utilisateur'
-  const userCity = user?.deliveryMan?.city || 'Ville inconnue'
-  const userEmail = user?.email || ''
 
-  // Fetch orders on mount
+  const firstName = user?.name?.split(" ")[0] || "Utilisateur"
+  const userCity = user?.deliveryMan?.city || "Ville inconnue"
+
   useEffect(() => {
     fetchOrders()
   }, [])
@@ -135,13 +146,13 @@ export default function HomeScreen() {
       setError(null)
       const token = await getAuthToken()
       if (!token) {
-        throw new Error('No authentication token found')
+        throw new Error("No authentication token found")
       }
       const response = await apiLatestOrders(token)
       setOrders(response.orders)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch orders')
-      console.error('Error fetching orders:', err)
+      setError(err instanceof Error ? err.message : "Failed to fetch orders")
+      console.error("Error fetching orders:", err)
     } finally {
       setLoading(false)
     }
@@ -153,13 +164,13 @@ export default function HomeScreen() {
       setError(null)
       const token = await getAuthToken()
       if (!token) {
-        throw new Error('No authentication token found')
+        throw new Error("No authentication token found")
       }
       const response = await apiLatestOrders(token)
       setOrders(response.orders)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch orders')
-      console.error('Error fetching orders:', err)
+      setError(err instanceof Error ? err.message : "Failed to fetch orders")
+      console.error("Error fetching orders:", err)
     } finally {
       setRefreshing(false)
     }
@@ -180,82 +191,128 @@ export default function HomeScreen() {
   const renderOrderItem = ({ item }: { item: Order }) => {
     const displayStatus = mapApiStatusToDisplayStatus(item.status)
     const productNames = getOrderProductNames(item)
-    
+    const productImage = item.orderItems.length > 0 ? item.orderItems[0].product.image : null
+
     return (
       <TouchableOpacity style={styles.shipmentItem} onPress={() => router.push(`/order-details/${item.id}`)}>
-        <View style={styles.shipmentIconContainer}>
-          <BoxIcon />
-        </View>
-        <View style={styles.shipmentDetails}>
-          <Text style={styles.shipmentName} numberOfLines={1}>{productNames}</Text>
-          <Text style={styles.shipmentTrackingId}>
-            <Text style={styles.boldText}>N°: </Text>
-            {item.orderCode}
-          </Text>
-          <Text style={styles.shipmentAddress} numberOfLines={1}>
-            {item.address}, {item.city}
-          </Text>
-          <Text style={styles.shipmentDate}>{formatDate(item.createdAt)}</Text>
-        </View>
-        <View style={[
-          styles.statusBadge,
-          { backgroundColor: `${getStatusColor(displayStatus)}1A` },
-        ]}>
-          <Text style={[styles.statusText, { color: getStatusColor(displayStatus) }]}>
-            {displayStatus}
-          </Text>
-        </View>
-        <Text style={styles.arrowIcon}>{">"}</Text>
+        <LinearGradient
+          colors={
+            displayStatus === "Livré"
+              ? ["#34C759", "#2C9F4F"]
+              : displayStatus === "Annulé"
+                ? ["#FF3B30", "#C62828"]
+                : ["#FFFFFF", "#F9F9F9"]
+          }
+          style={styles.shipmentItemGradient}
+        >
+          <View style={styles.shipmentItemHeader}>
+            <View style={styles.shipmentItemHeaderLeft}>
+              <Text
+                style={[
+                  styles.shipmentName,
+                  (displayStatus === "Livré" || displayStatus === "Annulé") && styles.shipmentNameLight,
+                ]}
+                numberOfLines={1}
+              >
+                {productNames}
+              </Text>
+              <Text
+                style={[
+                  styles.shipmentTrackingId,
+                  (displayStatus === "Livré" || displayStatus === "Annulé") && styles.shipmentTrackingIdLight,
+                ]}
+              >
+                N°: {item.orderCode}
+              </Text>
+            </View>
+            {productImage && <Image source={{ uri: productImage }} style={styles.productImage} />}
+          </View>
+          <View style={styles.shipmentItemBody}>
+            <Text
+              style={[
+                styles.shipmentAddress,
+                (displayStatus === "Livré" || displayStatus === "Annulé") && styles.shipmentAddressLight,
+              ]}
+              numberOfLines={1}
+            >
+              {item.customerName} - {item.address}, {item.city}
+            </Text>
+          </View>
+          <View style={styles.shipmentItemFooter}>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor:
+                    displayStatus === "Livré" || displayStatus === "Annulé" ? "rgba(255,255,255,0.2)" : "#E0E0E0",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color:
+                      displayStatus === "Livré" || displayStatus === "Annulé"
+                        ? "#FFFFFF"
+                        : getStatusColor(displayStatus),
+                  },
+                ]}
+              >
+                {displayStatus}
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.shipmentDate,
+                (displayStatus === "Livré" || displayStatus === "Annulé") && styles.shipmentDateLight,
+              ]}
+            >
+              {formatDate(item.createdAt)}
+            </Text>
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
     )
   }
-  
+
   const getStatusColor = (status: ShipmentStatus): string => {
     switch (status) {
-      case 'En cours':
-        return '#0f8fd5';
-      case 'En attente':
-        return '#FFA500';
-      case 'Livré':
-        return '#4CAF50';
+      case "En cours":
+        return "#0f8fd5"
+      case "En attente":
+        return "#FFA500"
+      case "Livré":
+        return "#4CAF50"
+      case "Annulé":
+        return "#f44336"
+      case "Reporté":
+        return "#ff9800"
       default:
-        return '#808080';
+        return "#808080"
     }
   }
 
-  const currentShipment = orders.find(o => mapApiStatusToDisplayStatus(o.status) === 'En cours')
+  const currentShipment = orders.find((o) => mapApiStatusToDisplayStatus(o.status) === "En cours")
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* --- Header -- */}
       <View style={styles.header}>
         <View style={styles.userInfo}>
           {user?.image ? (
-            <Image 
-              source={{ uri: user.image }} 
-              style={styles.avatar} 
-            />
+            <Image source={{ uri: user.image }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarText}>
-                {firstName.charAt(0).toUpperCase()}
-              </Text>
+              <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
             </View>
           )}
           <View>
             <Text style={styles.greeting}>Bonjour, {firstName}</Text>
             <Text style={styles.location}>{userCity}</Text>
-            {userEmail ? (
-              <Text style={styles.email} numberOfLines={1}>{userEmail}</Text>
-            ) : null}
           </View>
         </View>
         <View style={styles.headerIcons}>
-          <TouchableOpacity 
-            onPress={handleRefresh} 
-            disabled={refreshing}
-            style={styles.iconButton}
-          >
+          <TouchableOpacity onPress={handleRefresh} disabled={refreshing} style={styles.iconButton}>
             {refreshing ? (
               <ActivityIndicator size="small" color={LIGHT_COLORS.primary} />
             ) : (
@@ -284,51 +341,57 @@ export default function HomeScreen() {
         <FlatList
           ListHeaderComponent={
             <View style={styles.listHeaderContainer}>
-              {/* --- Current Shipping Card -- */}
               <Text style={styles.sectionTitle}>Livraison en cours</Text>
               {currentShipment ? (
-                <LinearGradient colors={["#0f8fd5", "#0a6ba8"]} style={styles.premiumCard}>
-                  <View style={styles.cardContent}>
-                    <View>
-                      <Text style={styles.premiumTitle}>
-                        {getOrderProductNames(currentShipment)}
-                      </Text>
-                      <Text style={styles.premiumId}>
-                        N°: {currentShipment.orderCode}
-                      </Text>
+                <TouchableOpacity onPress={() => router.push(`/order-details/${currentShipment.id}`)}>
+                  <LinearGradient colors={["#1E3A8A", "#0f8fd5"]} style={styles.creativeCard}>
+                    <View style={styles.creativeCardHeader}>
+                      <View>
+                        <Text style={styles.creativeCardTitle}>{getOrderProductNames(currentShipment)}</Text>
+                        <Text style={styles.creativeCardSubtitle}>#{currentShipment.orderCode}</Text>
+                      </View>
+                      {currentShipment.orderItems.length > 0 &&
+                        currentShipment.orderItems[0].product.image && (
+                          <Image
+                            source={{ uri: currentShipment.orderItems[0].product.image }}
+                            style={styles.creativeCardImage}
+                          />
+                        )}
                     </View>
-                    <TouchableOpacity 
-                      style={styles.arrowButton}
-                      onPress={() => router.push(`/order-details/${currentShipment.id}`)}
-                    >
-                      <Text style={styles.arrowIconWhite}>{">"}</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Image 
-                    source={require("../../assets/images/box-transparent.png")} 
-                    style={styles.boxImage} 
-                    resizeMode="contain"
-                  />
-                </LinearGradient>
+                    <View style={styles.creativeCardBody}>
+                      <Text style={styles.creativeCardCustomer}>{currentShipment.customerName}</Text>
+                      <View style={styles.creativeCardLocation}>
+                        <MapPinIcon color="#FFFFFF" />
+                        <Text style={styles.creativeCardAddress} numberOfLines={1}>
+                          {currentShipment.address}, {currentShipment.city}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.creativeCardFooter}>
+                      <Text style={styles.creativeCardStatus}>En Cours de Livraison</Text>
+                      <View style={styles.arrowButton}>
+                        <Text style={styles.arrowIconWhite}>{">"}</Text>
+                      </View>
+                    </View>
+                  </LinearGradient>
+                </TouchableOpacity>
               ) : (
                 <View style={styles.noShipmentCard}>
                   <Text style={styles.noShipmentText}>Aucune livraison en cours</Text>
                 </View>
               )}
 
-              {/* --- Recent Shipments -- */}
               <View style={styles.recentShipmentHeader}>
                 <Text style={styles.sectionTitle}>Livraisons récentes</Text>
-                <TouchableOpacity onPress={() => router.push('/history')}>
+                <TouchableOpacity onPress={() => router.push("/(tabs)/history")}>
                   <Text style={styles.viewMore}>Voir plus</Text>
                 </TouchableOpacity>
               </View>
 
-              {/* --- Search Bar -- */}
               <View style={styles.searchBar}>
                 <SearchIcon color={LIGHT_COLORS.icon} />
                 <TextInput
-                  placeholder="Rechercher un numéro de suivi"
+                  placeholder="Rechercher une commande..."
                   placeholderTextColor={LIGHT_COLORS.icon}
                   style={styles.searchInput}
                   value={searchQuery}
@@ -336,18 +399,21 @@ export default function HomeScreen() {
                 />
               </View>
 
-              {/* --- Filters -- */}
-              <View style={styles.filterContainer}>
-                {(["Tous", "En attente", "En cours", "Livré"] as ShipmentStatus[]).map((status) => (
-                  <TouchableOpacity
-                    key={status}
-                    style={[styles.filterButton, activeFilter === status && styles.activeFilterButton]}
-                    onPress={() => setActiveFilter(status)}
-                  >
-                    <Text style={[styles.filterText, activeFilter === status && styles.activeFilterText]}>{status}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterContainer}>
+                {(["Tous", "En attente", "En cours", "Livré", "Annulé", "Reporté"] as ShipmentStatus[]).map(
+                  (status) => (
+                    <TouchableOpacity
+                      key={status}
+                      style={[styles.filterButton, activeFilter === status && styles.activeFilterButton]}
+                      onPress={() => setActiveFilter(status)}
+                    >
+                      <Text style={[styles.filterText, activeFilter === status && styles.activeFilterText]}>
+                        {status}
+                      </Text>
+                    </TouchableOpacity>
+                  )
+                )}
+              </ScrollView>
             </View>
           }
           data={filteredOrders}
@@ -359,6 +425,7 @@ export default function HomeScreen() {
               <Text style={styles.emptyText}>Aucune livraison trouvée</Text>
             </View>
           }
+          contentContainerStyle={{ paddingBottom: 20 }}
         />
       )}
     </SafeAreaView>
@@ -386,20 +453,20 @@ const createStyles = () => {
       flex: 1,
     },
     avatar: {
-      width: 60,
-      height: 60,
-      borderRadius: 30,
+      width: 50,
+      height: 50,
+      borderRadius: 25,
       marginRight: 15,
     },
     avatarPlaceholder: {
       backgroundColor: LIGHT_COLORS.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
     },
     avatarText: {
-      color: '#fff',
-      fontSize: 24,
-      fontWeight: 'bold',
+      color: "#fff",
+      fontSize: 20,
+      fontWeight: "bold",
     },
     greeting: {
       color: LIGHT_COLORS.text,
@@ -410,23 +477,17 @@ const createStyles = () => {
     location: {
       color: LIGHT_COLORS.icon,
       fontSize: 14,
-      marginBottom: 2,
-    },
-    email: {
-      color: LIGHT_COLORS.icon,
-      fontSize: 12,
-      maxWidth: 200,
     },
     headerIcons: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       gap: 15,
     },
     iconButton: {
       width: 24,
       height: 24,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
     },
     listHeaderContainer: {
       paddingHorizontal: 20,
@@ -439,32 +500,76 @@ const createStyles = () => {
       marginTop: 20,
       marginBottom: 10,
     },
-    premiumCard: {
+    creativeCard: {
       borderRadius: 20,
       padding: 20,
+      marginBottom: 20,
+      shadowColor: "#000",
+      shadowOffset: {
+        width: 0,
+        height: 10,
+      },
+      shadowOpacity: 0.3,
+      shadowRadius: 20,
+      elevation: 10,
+    },
+    creativeCardHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
-      alignItems: "center",
-      overflow: "hidden",
-      marginBottom: 20,
+      alignItems: "flex-start",
+      marginBottom: 15,
     },
-    cardContent: {
-      flex: 1,
-    },
-    premiumTitle: {
+    creativeCardTitle: {
       color: "#FFFFFF",
       fontSize: 22,
       fontWeight: "bold",
+      maxWidth: "80%",
     },
-    premiumId: {
-      backgroundColor: "#FFFFFF",
-      color: "#0f8fd5",
+    creativeCardSubtitle: {
+      color: "#FFFFFF",
+      fontSize: 14,
+      opacity: 0.8,
+      marginTop: 4,
+    },
+    creativeCardImage: {
+      width: 60,
+      height: 60,
+      borderRadius: 15,
+      borderWidth: 2,
+      borderColor: "rgba(255,255,255,0.5)",
+    },
+    creativeCardBody: {
+      marginBottom: 20,
+    },
+    creativeCardCustomer: {
+      color: "#FFFFFF",
+      fontSize: 18,
+      fontWeight: "600",
+      marginBottom: 8,
+    },
+    creativeCardLocation: {
+      flexDirection: "row",
+      alignItems: "center",
+    },
+    creativeCardAddress: {
+      color: "#FFFFFF",
+      fontSize: 14,
+      marginLeft: 8,
+      flex: 1,
+    },
+    creativeCardFooter: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    creativeCardStatus: {
+      color: "#FFFFFF",
+      fontSize: 16,
+      fontWeight: "bold",
+      backgroundColor: "rgba(255,255,255,0.2)",
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 15,
-      marginTop: 10,
-      alignSelf: "flex-start",
-      fontWeight: "bold",
       overflow: "hidden",
     },
     arrowButton: {
@@ -480,14 +585,6 @@ const createStyles = () => {
       fontSize: 18,
       fontWeight: "bold",
     },
-    boxImage: {
-      width: 120,
-      height: 100,
-      position: "absolute",
-      right: 5,
-      bottom: -25,
-      opacity: 0.8,
-    },
     recentShipmentHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -500,11 +597,14 @@ const createStyles = () => {
     },
     searchBar: {
       flexDirection: "row",
-      backgroundColor: LIGHT_COLORS.secondary,
+      backgroundColor: LIGHT_COLORS.card,
       borderRadius: 15,
       paddingHorizontal: 15,
       alignItems: "center",
-      marginTop: 10,
+      marginTop: 15,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: LIGHT_COLORS.border,
     },
     searchInput: {
       flex: 1,
@@ -514,111 +614,131 @@ const createStyles = () => {
       fontSize: 16,
     },
     filterContainer: {
-      flexDirection: "row",
-      marginTop: 20,
+      marginTop: 10,
       marginBottom: 10,
     },
     filterButton: {
-      paddingHorizontal: 18,
+      paddingHorizontal: 20,
       paddingVertical: 10,
       borderRadius: 20,
       marginRight: 10,
-      backgroundColor: LIGHT_COLORS.secondary,
+      backgroundColor: LIGHT_COLORS.card,
+      borderWidth: 1,
+      borderColor: LIGHT_COLORS.border,
     },
     activeFilterButton: {
       backgroundColor: "#0f8fd5",
+      borderColor: "#0f8fd5",
     },
     filterText: {
       color: LIGHT_COLORS.text,
-      fontWeight: "500",
+      fontWeight: "600",
+      fontSize: 14,
     },
     activeFilterText: {
       color: "#FFFFFF",
       fontWeight: "bold",
     },
     shipmentItem: {
-      flexDirection: "row",
-      backgroundColor: LIGHT_COLORS.card,
-      borderRadius: 15,
-      padding: 15,
-      alignItems: "center",
-      marginBottom: 15,
       marginHorizontal: 20,
+      marginBottom: 15,
+      borderRadius: 20,
       shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 5,
-      elevation: 2,
+      shadowOffset: { width: 0, height: 5 },
+      shadowOpacity: 0.1,
+      shadowRadius: 10,
+      elevation: 5,
     },
-    shipmentIconContainer: {
-      backgroundColor: LIGHT_COLORS.secondary,
-      padding: 12,
-      borderRadius: 12,
-      marginRight: 15,
+    shipmentItemGradient: {
+      borderRadius: 20,
+      padding: 15,
     },
-    shipmentDetails: {
+    shipmentItemHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 10,
+    },
+    shipmentItemHeaderLeft: {
       flex: 1,
       marginRight: 10,
-      overflow: 'hidden',
     },
     shipmentName: {
       color: LIGHT_COLORS.text,
       fontSize: 16,
       fontWeight: "bold",
     },
+    shipmentNameLight: {
+      color: "#FFFFFF",
+    },
     shipmentTrackingId: {
       color: LIGHT_COLORS.icon,
       fontSize: 13,
       marginTop: 2,
     },
+    shipmentTrackingIdLight: {
+      color: "rgba(255,255,255,0.8)",
+    },
+    productImage: {
+      width: 45,
+      height: 45,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.3)",
+    },
+    shipmentItemBody: {
+      marginBottom: 10,
+    },
     shipmentAddress: {
       color: LIGHT_COLORS.text,
-      fontSize: 12,
-      opacity: 0.8,
-      marginTop: 2,
+      fontSize: 14,
     },
-    shipmentDate: {
-      color: LIGHT_COLORS.primary,
-      fontSize: 11,
-      marginTop: 3,
-      fontWeight: '500',
+    shipmentAddressLight: {
+      color: "rgba(255,255,255,0.9)",
+    },
+    shipmentItemFooter: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginTop: 5,
     },
     statusBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: 12,
-      alignSelf: 'flex-start',
-      marginRight: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 15,
     },
     statusText: {
       fontSize: 12,
-      fontWeight: '600',
+      fontWeight: "bold",
     },
-    boldText: {
-      fontWeight: 'bold',
+    shipmentDate: {
+      color: LIGHT_COLORS.icon,
+      fontSize: 12,
+      fontWeight: "500",
+    },
+    shipmentDateLight: {
+      color: "rgba(255,255,255,0.8)",
     },
     noShipmentCard: {
-      backgroundColor: LIGHT_COLORS.secondary,
+      backgroundColor: LIGHT_COLORS.card,
       borderRadius: 20,
       padding: 20,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       minHeight: 120,
       marginBottom: 20,
+      borderWidth: 1,
+      borderColor: LIGHT_COLORS.border,
     },
     noShipmentText: {
       color: LIGHT_COLORS.icon,
       fontSize: 16,
-      textAlign: 'center',
-    },
-    arrowIcon: {
-      color: LIGHT_COLORS.icon,
-      fontSize: 18,
-      fontWeight: "bold",
+      textAlign: "center",
     },
     emptyContainer: {
       padding: 20,
-      alignItems: 'center',
+      alignItems: "center",
+      marginTop: 50,
     },
     emptyText: {
       color: LIGHT_COLORS.icon,
@@ -626,8 +746,8 @@ const createStyles = () => {
     },
     loadingContainer: {
       flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
     },
     loadingText: {
       marginTop: 10,
@@ -636,14 +756,14 @@ const createStyles = () => {
     },
     errorContainer: {
       flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
       paddingHorizontal: 20,
     },
     errorText: {
-      color: '#FF0000',
+      color: "#FF0000",
       fontSize: 16,
-      textAlign: 'center',
+      textAlign: "center",
       marginBottom: 20,
     },
     retryButton: {
@@ -653,9 +773,9 @@ const createStyles = () => {
       borderRadius: 20,
     },
     retryButtonText: {
-      color: '#FFFFFF',
+      color: "#FFFFFF",
       fontSize: 16,
-      fontWeight: 'bold',
+      fontWeight: "bold",
     },
   })
 }

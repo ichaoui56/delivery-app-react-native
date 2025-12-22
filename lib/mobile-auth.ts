@@ -100,6 +100,7 @@ export async function apiLogout(token: string): Promise<void> {
 }
 
 export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'ASSIGNED_TO_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'REPORTED' | 'REJECTED'
+
 type Product = {
   id: number
   name: string
@@ -169,10 +170,150 @@ export type OrdersResponse = {
   orders: Order[]
 }
 
+// ===== HISTORY TYPES =====
+export type HistoryOrderStatus = 'PENDING' | 'ACCEPTED' | 'ASSIGNED_TO_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'REPORTED' | 'REJECTED'
+
+export type OrderHistory = {
+  id: number
+  orderId: number
+  orderCode: string
+  customerName: string
+  deliveryAddress: string
+  city: string
+  status: HistoryOrderStatus
+  date: string
+  amount: string
+  totalPrice: number
+  itemsCount: number
+  deliveryTime?: string
+  note?: string
+  customerPhone: string
+  paymentMethod: string
+  merchant?: Merchant
+  orderItems: OrderItem[]
+  createdAt: string
+  deliveredAt?: string | null
+}
+
+export type OrdersHistoryResponse = {
+  orders: OrderHistory[]
+  hasMore: boolean
+  totalCount: number
+}
+
+export type OrderStatsResponse = {
+  stats: {
+    totalOrders: number
+    delivered: number
+    cancelled: number
+    reported: number
+    totalEarnings: number
+    avgDeliveryTime: string
+    successRate: number
+    currentStreak: number
+    month: string
+  }
+}
+
+// ===== HISTORY FUNCTIONS =====
+export async function apiOrderHistory(
+  token: string,
+  options?: {
+    status?: "All" | "Delivered" | "Cancelled" | "Reported" | "DELIVERED" | "CANCELLED" | "REPORTED" // Accept both formats
+    take?: number
+    skip?: number
+  }
+): Promise<OrdersHistoryResponse> {
+  const params = new URLSearchParams()
+
+  // Convert frontend status to backend status if needed
+  let statusParam = options?.status
+  if (statusParam) {
+    // Map frontend filter to backend status
+    const statusMap: Record<string, string> = {
+      "Delivered": "DELIVERED",
+      "Cancelled": "CANCELLED",
+      "Reported": "REPORTED",
+      // Keep uppercase as is
+      "DELIVERED": "DELIVERED",
+      "CANCELLED": "CANCELLED",
+      "REPORTED": "REPORTED"
+    }
+
+    if (statusParam !== "All") {
+      const backendStatus = statusMap[statusParam] || statusParam
+      params.append('status', backendStatus)
+    }
+  }
+
+  if (options?.take) params.append('take', options.take.toString())
+  if (options?.skip) params.append('skip', options.skip.toString())
+
+  const url = `${getApiBaseUrl()}/api/mobile/orders${params.toString() ? `?${params.toString()}` : ''}`
+
+  console.log('Fetching history from:', url)
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  console.log('History response status:', res.status)
+
+  const body = await readJsonSafe<any>(res)
+
+  console.log('History response body:', JSON.stringify(body, null, 2))
+
+  if (!res.ok) {
+    const message = body?.error || 'Failed to fetch order history'
+    throw new Error(message)
+  }
+
+  // Check if body exists and has orders property (it could be empty array)
+  if (!body || body.orders === undefined) {
+    console.error('Invalid response structure:', body)
+    throw new Error('Invalid order history response')
+  }
+
+  // It's okay if orders is an empty array
+  return {
+    orders: body.orders || [],
+    hasMore: body.hasMore || false,
+    totalCount: body.totalCount || 0
+  }
+}
+
+export async function apiOrderStats(token: string): Promise<OrderStatsResponse> {
+  const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/stats`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  const body = await readJsonSafe<OrderStatsResponse & { error?: string }>(res)
+
+  if (!res.ok) {
+    const message = body?.error || 'Failed to fetch order statistics'
+    throw new Error(message)
+  }
+
+  if (!body?.stats) {
+    throw new Error('Invalid order statistics response')
+  }
+
+  return body
+}
+
+// ===== EXISTING FUNCTIONS =====
 export async function apiLatestOrders(token: string): Promise<OrdersResponse> {
   const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/latest`, {
     method: 'GET',
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     }
@@ -194,7 +335,7 @@ export async function apiLatestOrders(token: string): Promise<OrdersResponse> {
 export async function apiAllOrders(token: string): Promise<OrdersResponse> {
   const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders`, {
     method: 'GET',
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     }
@@ -220,7 +361,7 @@ export type OrderDetailsResponse = {
 export async function apiOrderDetails(token: string, orderId: number): Promise<OrderDetailsResponse> {
   const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}`, {
     method: 'GET',
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     }
@@ -253,7 +394,7 @@ export type AcceptOrderResponse = {
 export async function apiAcceptOrder(token: string, orderId: number): Promise<AcceptOrderResponse> {
   const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/accept`, {
     method: 'POST',
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     }
@@ -298,7 +439,7 @@ export async function apiUpdateOrderStatus(
 ): Promise<UpdateOrderStatusResponse> {
   const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/status`, {
     method: 'PATCH',
-    headers: { 
+    headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     },
@@ -331,7 +472,7 @@ export async function apiUpdateOrderStatus(
         }
       }
     }
-    
+
     // If body exists but doesn't match expected structure, log it
     console.warn('Unexpected response structure:', body)
   }
