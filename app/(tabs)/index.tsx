@@ -1,23 +1,23 @@
 "use client"
 
 import { useAuth } from "@/lib/auth-provider"
+import { apiLatestOrders, OrderStatus as ApiOrderStatus, getAuthToken, Order } from "@/lib/mobile-auth"
 import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
 import {
-  FlatList,
-  Image,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ActivityIndicator,
-  ScrollView,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native"
-import Svg, { Path, Circle } from "react-native-svg"
-import { apiLatestOrders, Order, OrderStatus as ApiOrderStatus, getAuthToken } from "@/lib/mobile-auth"
+import Svg, { Circle, Path } from "react-native-svg"
 
 // --- SVG Icons ---
 const BellIcon = ({ size = 24, color = "#000000" }) => (
@@ -89,7 +89,7 @@ const mapApiStatusToDisplayStatus = (status: ApiOrderStatus): ShipmentStatus => 
       return "Livré"
     case "CANCELLED":
       return "Annulé"
-    case "REPORTED":
+    case "DELAY":
       return "Reporté"
     default:
       return "En attente"

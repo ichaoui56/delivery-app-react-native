@@ -1,3 +1,4 @@
+import { DeliveryAttempt } from "@/types/DeliveryAttempt"
 import * as SecureStore from "expo-secure-store"
 
 const TOKEN_KEY = "mobile_jwt"
@@ -14,6 +15,7 @@ export type DeliveryManUser = {
   id: number
   name: string
   email: string
+  phone: string
   image?: string | null
   role: "DELIVERYMAN"
   deliveryMan: DeliveryMan
@@ -99,7 +101,8 @@ export async function apiLogout(token: string): Promise<void> {
   }).catch(() => null)
 }
 
-export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'ASSIGNED_TO_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'REPORTED' | 'REJECTED'
+// UPDATED: Removed DELAY, added DELAYED
+export type OrderStatus = 'PENDING' | 'ACCEPTED' | 'ASSIGNED_TO_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'DELAYED' | 'REJECTED'
 
 type Product = {
   id: number
@@ -171,7 +174,8 @@ export type OrdersResponse = {
 }
 
 // ===== HISTORY TYPES =====
-export type HistoryOrderStatus = 'PENDING' | 'ACCEPTED' | 'ASSIGNED_TO_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'REPORTED' | 'REJECTED'
+// UPDATED: Removed DELAY, added DELAYED
+export type HistoryOrderStatus = 'PENDING' | 'ACCEPTED' | 'ASSIGNED_TO_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'DELAYED' | 'REJECTED'
 
 export type OrderHistory = {
   id: number
@@ -206,7 +210,7 @@ export type OrderStatsResponse = {
     totalOrders: number
     delivered: number
     cancelled: number
-    reported: number
+    delayed: number // UPDATED: Changed from DELAY to delayed
     totalEarnings: number
     avgDeliveryTime: string
     successRate: number
@@ -219,25 +223,24 @@ export type OrderStatsResponse = {
 export async function apiOrderHistory(
   token: string,
   options?: {
-    status?: "All" | "Delivered" | "Cancelled" | "Reported" | "DELIVERED" | "CANCELLED" | "REPORTED" // Accept both formats
+    status?: "All" | "Delivered" | "Cancelled" | "Delayed" | "DELIVERED" | "CANCELLED" | "DELAYED"
     take?: number
     skip?: number
   }
 ): Promise<OrdersHistoryResponse> {
   const params = new URLSearchParams()
 
-  // Convert frontend status to backend status if needed
   let statusParam = options?.status
   if (statusParam) {
     // Map frontend filter to backend status
     const statusMap: Record<string, string> = {
       "Delivered": "DELIVERED",
       "Cancelled": "CANCELLED",
-      "Reported": "REPORTED",
+      "Delayed": "DELAYED", // UPDATED: Changed from DELAY to Delayed
       // Keep uppercase as is
       "DELIVERED": "DELIVERED",
       "CANCELLED": "CANCELLED",
-      "REPORTED": "REPORTED"
+      "DELAYED": "DELAYED" // UPDATED
     }
 
     if (statusParam !== "All") {
@@ -272,13 +275,11 @@ export async function apiOrderHistory(
     throw new Error(message)
   }
 
-  // Check if body exists and has orders property (it could be empty array)
   if (!body || body.orders === undefined) {
     console.error('Invalid response structure:', body)
     throw new Error('Invalid order history response')
   }
 
-  // It's okay if orders is an empty array
   return {
     orders: body.orders || [],
     hasMore: body.hasMore || false,
@@ -414,8 +415,9 @@ export async function apiAcceptOrder(token: string, orderId: number): Promise<Ac
   return body
 }
 
+// UPDATED: Removed DELAY, added DELAYED
 export type UpdateOrderStatusRequest = {
-  status: 'REPORTED' | 'REJECTED' | 'CANCELLED' | 'DELIVERED'
+  status: 'DELAYED' | 'REJECTED' | 'CANCELLED' | 'DELIVERED'
   reason?: string
   notes?: string
   location?: string
@@ -454,12 +456,9 @@ export async function apiUpdateOrderStatus(
     throw new Error(message)
   }
 
-  // Log response for debugging
   console.log('Update status response:', body)
 
-  // Handle response - backend returns success field, but be lenient if structure differs
   if (body) {
-    // Check if response has the expected structure
     if (body.success !== undefined || body.order) {
       return {
         success: body.success ?? true,
@@ -472,10 +471,29 @@ export async function apiUpdateOrderStatus(
         }
       }
     }
-
-    // If body exists but doesn't match expected structure, log it
     console.warn('Unexpected response structure:', body)
   }
 
   throw new Error('Invalid update order status response')
+}
+
+// Add this to your existing API functions in mobile-auth.ts
+export async function apiOrderDeliveryAttempts(token: string, orderId: number): Promise<{ attempts: DeliveryAttempt[] }> {
+  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "https://sonic-delivery.up.railway.app"
+  
+  const res = await fetch(`${baseUrl}/api/mobile/orders/${orderId}/attempts`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  const body = await res.json()
+
+  if (!res.ok) {
+    throw new Error(body?.error || 'Failed to fetch delivery attempts')
+  }
+
+  return body
 }

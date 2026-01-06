@@ -33,7 +33,6 @@ export default function TabsLayout() {
   const navItems: NavItem[] = [
     { name: "home", label: "Accueil", icon: "home" as keyof typeof Ionicons.glyphMap },
     { name: "orders", label: "Commandes", icon: "list" as keyof typeof Ionicons.glyphMap },
-    { name: "map", label: "Carte", icon: "map" as keyof typeof Ionicons.glyphMap },
     { name: "history", label: "Historique", icon: "time" as keyof typeof Ionicons.glyphMap },
     { name: "settings", label: "Paramètres", icon: "settings" as keyof typeof Ionicons.glyphMap },
   ]
@@ -44,8 +43,6 @@ export default function TabsLayout() {
         return <HomeScreen />
       case "orders":
         return <OrderScreen />
-      case "map":
-        return <MapScreen />
       case "history":
         return <HistoryScreen />
       case "settings":

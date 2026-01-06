@@ -6,16 +6,15 @@ import { MaterialCommunityIcons } from "@expo/vector-icons"
 import { useRouter } from "expo-router"
 import { useEffect, useMemo, useState } from "react"
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    FlatList,
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native"
 
 type FilterStatus = "all" | OrderStatus
@@ -79,7 +78,7 @@ const OrdersScreen = () => {
       ASSIGNED_TO_DELIVERY: "Assignée",
       DELIVERED: "Livrée",
       CANCELLED: "Annulée",
-      REPORTED: "Signalée",
+      DELAY: "Signalée",
       REJECTED: "Rejetée",
     }
     return statusMap[status] || status
@@ -96,7 +95,7 @@ const OrdersScreen = () => {
         return { color: "#28a745", icon: "check-circle", bgColor: "#E8F5E9" }
       case "CANCELLED":
       case "REJECTED":
-      case "REPORTED":
+      case "DELAY":
         return { color: "#dc3545", icon: "close-circle", bgColor: "#FDEDED" }
       default:
         return { color: "#666", icon: "help-circle", bgColor: "#F0F0F0" }

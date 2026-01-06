@@ -6,16 +6,24 @@ import { Image } from "expo-image"
 import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useState } from "react"
-import { SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from "react-native"
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, TextInput, Alert } from "react-native"
 
 const SettingsScreen = () => {
   const router = useRouter()
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true)
-  const [locationEnabled, setLocationEnabled] = useState(true)
-  const { user, signOut, status } = useAuth()
+  const { user, signOut, status, updateProfile } = useAuth()
   const [avatarLoading, setAvatarLoading] = useState(false)
   const [avatarLoadedUri, setAvatarLoadedUri] = useState<string | null>(null)
-
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    name: user?.name || "",
+    phone: user?.phone || "",
+    vehicleType: user?.deliveryMan?.vehicleType || "",
+    image: user?.image || null
+  })
+    
   const profileLoading = status === "loading" || avatarLoading
 
   const handleLogout = async () => {
@@ -23,39 +31,58 @@ const SettingsScreen = () => {
     router.replace("/(auth)/signin")
   }
 
-  type SettingsMenu = {
-    title: string;
-    icon: keyof typeof MaterialCommunityIcons.glyphMap;
-    items: Array<{
-      label: string;
-      state: boolean;
-      setState: (value: boolean) => void;
-    }>;
-  };
+  const handleEditToggle = () => {
+    if (isEditing) {
+      // Reset form if canceling edit
+      setFormData({
+        name: user?.name || "",
+        phone: user?.phone || "",
+        vehicleType: user?.deliveryMan?.vehicleType || "",
+        image: user?.image || null
+      })
+    }
+    setIsEditing(!isEditing)
+  }
 
-  const settingsMenus: SettingsMenu[] = [
-    {
-      title: "Notifications",
-      icon: "bell",
-      items: [{ label: "Notifications push", state: notificationsEnabled, setState: setNotificationsEnabled }],
-    },
-    {
-      title: "Confidentialité et sécurité",
-      icon: "lock",
-      items: [{ label: "Services de localisation", state: locationEnabled, setState: setLocationEnabled }],
-    },
-  ]
+  const handleSaveProfile = async () => {
+    if (!formData.name.trim()) {
+      Alert.alert("Erreur", "Le nom est obligatoire")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await updateProfile({
+        name: formData.name,
+        phone: formData.phone || null,
+        vehicleType: formData.vehicleType || null,
+        image: formData.image || null
+      })
+      setIsEditing(false)
+      Alert.alert("Succès", "Profil mis à jour avec succès")
+    } catch (error) {
+      Alert.alert("Erreur", "Échec de la mise à jour du profil")
+      console.error("Profile update error:", error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleChangeImage = () => {
+    // TODO: Implement image picker functionality
+    Alert.alert("Info", "La fonctionnalité de changement de photo sera bientôt disponible")
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Paramètres</Text>
+        <Text style={styles.headerTitle}>Profil</Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
         {/* Profile Card */}
         <LinearGradient colors={["#0f8fd5", "#0a6ba8"]} style={styles.profileCard}>
-          <View style={styles.profileAvatarWrapper}>
+          <TouchableOpacity onPress={handleChangeImage} style={styles.profileAvatarWrapper}>
             {profileLoading ? <View style={styles.profileAvatarSkeleton} /> : null}
             <Image
               source={user?.image ? user.image : require("../../assets/images/profil-icon.png")}
@@ -71,12 +98,27 @@ const SettingsScreen = () => {
                 if (user?.image) setAvatarLoadedUri(user.image)
               }}
             />
-          </View>
+            <View style={styles.cameraIconWrapper}>
+              <MaterialCommunityIcons name="camera" size={16} color="#0f8fd5" />
+            </View>
+          </TouchableOpacity>
+          
           <View style={styles.profileInfo}>
             {profileLoading ? (
               <>
                 <View style={styles.profileTextSkeletonLg} />
                 <View style={styles.profileTextSkeletonSm} />
+              </>
+            ) : isEditing ? (
+              <>
+                <TextInput
+                  style={styles.editInput}
+                  value={formData.name}
+                  onChangeText={(text) => setFormData({...formData, name: text})}
+                  placeholder="Nom complet"
+                  placeholderTextColor="rgba(255, 255, 255, 0.7)"
+                />
+                <Text style={styles.profileEmail}>{user?.email || ""}</Text>
               </>
             ) : (
               <>
@@ -91,79 +133,152 @@ const SettingsScreen = () => {
               </>
             )}
           </View>
-          <TouchableOpacity style={styles.editButton}>
-            <MaterialCommunityIcons name="pencil" size={16} color="#0f8fd5" />
+          
+          <TouchableOpacity 
+            style={[styles.editButton, isEditing && styles.editButtonActive]}
+            onPress={handleEditToggle}
+            disabled={isSubmitting}
+          >
+            <MaterialCommunityIcons 
+              name={isEditing ? "close" : "pencil"} 
+              size={16} 
+              color={isEditing ? "#FF6B6B" : "#0f8fd5"} 
+            />
           </TouchableOpacity>
         </LinearGradient>
 
-        {/* Settings Sections */}
-        {settingsMenus.map((section, index) => (
-          <View key={index} style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <MaterialCommunityIcons name={section.icon} size={20} color="#0f8fd5" />
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-            </View>
-            {section.items.map((item, itemIndex) => (
-              <View key={itemIndex} style={styles.settingItem}>
-                <Text style={styles.settingLabel}>{item.label}</Text>
-                <Switch
-                  trackColor={{ false: "#D0D0D0", true: "#B3D9E8" }}
-                  thumbColor={item.state ? "#0f8fd5" : "#F0F0F0"}
-                  onValueChange={item.setState}
-                  value={item.state}
+        {/* Edit Form Section */}
+        {isEditing && (
+          <View style={styles.editSection}>
+            <View style={styles.editForm}>
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Nom complet</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={formData.name}
+                  onChangeText={(text) => setFormData({...formData, name: text})}
+                  placeholder="Entrez votre nom"
                 />
               </View>
-            ))}
-          </View>
-        ))}
 
-        {/* App Settings */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Téléphone</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={formData.phone}
+                  onChangeText={(text) => setFormData({...formData, phone: text})}
+                  placeholder="Entrez votre numéro de téléphone"
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Type de véhicule</Text>
+                <TextInput
+                  style={styles.formInput}
+                  value={formData.vehicleType}
+                  onChangeText={(text) => setFormData({...formData, vehicleType: text})}
+                  placeholder="Ex: Moto, Voiture, Vélo"
+                />
+              </View>
+
+              <TouchableOpacity 
+                style={[styles.saveButton, isSubmitting && styles.saveButtonDisabled]}
+                onPress={handleSaveProfile}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <Text style={styles.saveButtonText}>Enregistrement...</Text>
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />
+                    <Text style={styles.saveButtonText}>Enregistrer les modifications</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Account Info Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <MaterialCommunityIcons name="account" size={20} color="#0f8fd5" />
+            <Text style={styles.sectionTitle}>Informations du compte</Text>
+          </View>
+          
+          <View style={styles.infoCard}>
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="email" size={18} color="#666" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={styles.infoValue}>{user?.email || "Non renseigné"}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="phone" size={18} color="#666" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Téléphone</Text>
+                <Text style={styles.infoValue}>{user?.phone || "Non renseigné"}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="map-marker" size={18} color="#666" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Ville</Text>
+                <Text style={styles.infoValue}>{user?.deliveryMan?.city || "Non renseigné"}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="motorbike" size={18} color="#666" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Véhicule</Text>
+                <Text style={styles.infoValue}>{user?.deliveryMan?.vehicleType || "Non renseigné"}</Text>
+              </View>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <MaterialCommunityIcons name="cash" size={18} color="#666" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Tarif de base</Text>
+                <Text style={styles.infoValue}>
+                  {user?.deliveryMan?.baseFee ? `${user.deliveryMan.baseFee} DH` : "Non défini"}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* App Settings - Only keep essential options */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <MaterialCommunityIcons name="cog" size={20} color="#0f8fd5" />
-            <Text style={styles.sectionTitle}>Paramètres de l’application</Text>
+            <Text style={styles.sectionTitle}>Préférences</Text>
           </View>
+          
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
-              <Text style={styles.menuItemText}>Modifier le profil</Text>
+              <MaterialCommunityIcons name="bell" size={20} color="#0f8fd5" style={styles.menuItemIcon} />
+              <Text style={styles.menuItemText}>Notifications</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color="#A0A0A0" />
           </TouchableOpacity>
+          
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
-              <Text style={styles.menuItemText}>Changer le mot de passe</Text>
+              <MaterialCommunityIcons name="lock" size={20} color="#0f8fd5" style={styles.menuItemIcon} />
+              <Text style={styles.menuItemText}>Sécurité</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color="#A0A0A0" />
           </TouchableOpacity>
+          
           <TouchableOpacity style={styles.menuItem}>
             <View style={styles.menuItemLeft}>
-              <Text style={styles.menuItemText}>À propos de l’application</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color="#A0A0A0" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Support & Info */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <MaterialCommunityIcons name="help-circle" size={20} color="#0f8fd5" />
-            <Text style={styles.sectionTitle}>Assistance</Text>
-          </View>
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Text style={styles.menuItemText}>Aide et assistance</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color="#A0A0A0" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Text style={styles.menuItemText}>Conditions d’utilisation</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={20} color="#A0A0A0" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuItemLeft}>
-              <Text style={styles.menuItemText}>Politique de confidentialité</Text>
+              <MaterialCommunityIcons name="information" size={20} color="#0f8fd5" style={styles.menuItemIcon} />
+              <Text style={styles.menuItemText}>À propos de l'application</Text>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={20} color="#A0A0A0" />
           </TouchableOpacity>
@@ -222,6 +337,19 @@ const styles = StyleSheet.create({
   profileAvatarWrapper: {
     position: "relative",
   },
+  cameraIconWrapper: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#0f8fd5",
+  },
   profileAvatarSkeleton: {
     position: "absolute",
     left: 0,
@@ -233,6 +361,16 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
+    marginLeft: 12,
+  },
+  editInput: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 4,
   },
   profileTextSkeletonLg: {
     width: 140,
@@ -270,6 +408,56 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  editButtonActive: {
+    backgroundColor: "#FFEBEE",
+  },
+  editSection: {
+    marginBottom: 20,
+  },
+  editForm: {
+    backgroundColor: "#F9F9F9",
+    borderRadius: 12,
+    padding: 16,
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#1A1A1A",
+  },
+  saveButton: {
+    flexDirection: "row",
+    backgroundColor: "#4CAF50",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 8,
+  },
+  saveButtonDisabled: {
+    backgroundColor: "#A5D6A7",
+    opacity: 0.7,
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginLeft: 8,
+  },
   section: {
     marginBottom: 20,
   },
@@ -285,20 +473,31 @@ const styles = StyleSheet.create({
     color: "#1A1A1A",
     marginLeft: 10,
   },
-  settingItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  infoCard: {
     backgroundColor: "#F9F9F9",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
     borderRadius: 12,
-    marginBottom: 8,
+    padding: 16,
   },
-  settingLabel: {
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEEEEE",
+  },
+  infoContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 2,
+  },
+  infoValue: {
     fontSize: 14,
-    color: "#1A1A1A",
     fontWeight: "600",
+    color: "#1A1A1A",
   },
   menuItem: {
     flexDirection: "row",
@@ -312,6 +511,11 @@ const styles = StyleSheet.create({
   },
   menuItemLeft: {
     flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  menuItemIcon: {
+    marginRight: 12,
   },
   menuItemText: {
     fontSize: 14,

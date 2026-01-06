@@ -1,36 +1,35 @@
 "use client"
 
+import { useAuth } from "@/lib/auth-provider"
+import {
+  apiOrderHistory,
+  apiOrderStats,
+  HistoryOrderStatus,
+  OrderHistory,
+  OrderStatsResponse
+} from "@/lib/mobile-auth"
 import { MaterialCommunityIcons } from "@expo/vector-icons"
 import { LinearGradient } from "expo-linear-gradient"
-import { useState, useEffect, useRef, useCallback } from "react"
-import { 
-  FlatList, 
-  SafeAreaView, 
-  StyleSheet, 
-  Text, 
-  TouchableOpacity, 
-  View, 
-  Animated, 
-  Dimensions,
-  ScrollView,
-  RefreshControl,
+import { useCallback, useEffect, useRef, useState } from "react"
+import {
   ActivityIndicator,
-  Alert
+  Alert,
+  Animated,
+  Dimensions,
+  FlatList,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native"
-import { useAuth } from "@/lib/auth-provider"
-import { 
-  OrderHistory, 
-  OrdersHistoryResponse, 
-  OrderStatsResponse,
-  apiOrderHistory, 
-  apiOrderStats,
-  HistoryOrderStatus 
-} from "@/lib/mobile-auth"
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
 // Define the filter types - frontend filters
-type FilterStatus = "All" | "Delivered" | "Cancelled" | "Reported"
+type FilterStatus = "All" | "Delivered" | "Cancelled" | "Delayed" | "PENDING" | "DELIVERED" | "CANCELLED" | "DELAYED"
 
 const HistoryScreen = () => {
   const { token } = useAuth()
@@ -38,7 +37,7 @@ const HistoryScreen = () => {
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
-  const [filterLoading, setFilterLoading] = useState(false) // New state for filter loading
+  const [filterLoading, setFilterLoading] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null)
   const [orders, setOrders] = useState<OrderHistory[]>([])
   const [stats, setStats] = useState<OrderStatsResponse['stats'] | null>(null)
@@ -49,6 +48,26 @@ const HistoryScreen = () => {
   const scrollY = useRef(new Animated.Value(0)).current
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(50)).current
+
+  // Map frontend filter labels to backend status values
+  const getBackendStatus = (filter: FilterStatus): HistoryOrderStatus | undefined => {
+    switch (filter) {
+      case "Delivered":
+      case "DELIVERED":
+        return "DELIVERED"
+      case "Cancelled":
+      case "CANCELLED":
+        return "CANCELLED"
+      case "Delayed":
+      case "DELAYED":
+        return "DELAYED"
+      case "PENDING":
+        return "PENDING"
+      case "All":
+      default:
+        return undefined
+    }
+  }
 
   // Load stats once on initial mount
   useEffect(() => {
@@ -84,47 +103,55 @@ const HistoryScreen = () => {
     ]).start()
   }, [])
 
-  const loadData = useCallback(async (isRefresh = false) => {
+  const loadData = useCallback(async (isRefresh = false, currentFilter?: FilterStatus) => {
     if (!token) {
       console.log('No token available')
       return
     }
 
     try {
-      console.log('Loading data, isRefresh:', isRefresh, 'filter:', filter)
+      const filterToUse = currentFilter !== undefined ? currentFilter : filter
+      console.log('Loading data, isRefresh:', isRefresh, 'filter:', filterToUse)
       
       if (isRefresh) {
         setRefreshing(true)
-        setSkip(0)
       } else if (!isRefresh && orders.length === 0) {
         setLoading(true)
       }
 
-      // Load orders - pass the filter directly
-      console.log('Loading history with status:', filter)
+      // Get the backend status from current filter
+      const backendStatus = getBackendStatus(filterToUse)
+      const currentSkip = isRefresh ? 0 : skip
+      
+      console.log('Loading history with status:', {
+        frontendFilter: filterToUse,
+        backendStatus: backendStatus,
+        take,
+        skip: currentSkip
+      })
       
       const historyResponse = await apiOrderHistory(token, {
-        status: filter === "All" ? undefined : filter,
+        status: backendStatus,
         take,
-        skip: isRefresh ? 0 : skip
+        skip: currentSkip
       })
       
       console.log('History response:', {
         ordersCount: historyResponse.orders.length,
         hasMore: historyResponse.hasMore,
-        totalCount: historyResponse.totalCount
+        totalCount: historyResponse.totalCount,
+        firstOrderStatus: historyResponse.orders[0]?.status
       })
 
-      if (isRefresh || skip === 0) {
+      if (isRefresh || currentSkip === 0) {
         setOrders(historyResponse.orders)
+        setSkip(historyResponse.orders.length)
       } else {
         setOrders(prev => [...prev, ...historyResponse.orders])
+        setSkip(prev => prev + historyResponse.orders.length)
       }
 
       setHasMore(historyResponse.hasMore)
-      if (!isRefresh) {
-        setSkip(prev => prev + historyResponse.orders.length)
-      }
       
       console.log('Data loaded successfully')
       
@@ -139,41 +166,44 @@ const HistoryScreen = () => {
       setLoading(false)
       setRefreshing(false)
       setLoadingMore(false)
-      setFilterLoading(false) // Reset filter loading
+      setFilterLoading(false)
     }
   }, [token, filter, skip, orders.length])
 
   // Initial load
   useEffect(() => {
     console.log('Initial load effect triggered')
-    loadData()
-  }, [])
+    if (token) {
+      loadData()
+    }
+  }, [token])
 
   const onRefresh = () => {
     console.log('Pull to refresh triggered')
+    setSkip(0)
     loadData(true)
   }
 
   const loadMore = () => {
-    if (!loadingMore && hasMore) {
+    if (!loadingMore && hasMore && !filterLoading) {
       console.log('Loading more orders...')
       setLoadingMore(true)
       loadData()
     }
   }
 
-  const handleFilterChange = async (newFilter: FilterStatus) => {
+  const handleFilterChange = (newFilter: FilterStatus) => {
     console.log('Filter changed to:', newFilter)
     setFilter(newFilter)
     setSkip(0)
-    setOrders([]) // Clear orders immediately
+    setOrders([])
     setHasMore(true)
-    setFilterLoading(true) // Show skeleton loader
+    setFilterLoading(true)
     
-    // Load data for the new filter
+    // Load data immediately with the new filter
     setTimeout(() => {
-      loadData()
-    }, 300) // Small delay for better UX
+      loadData(true, newFilter)
+    }, 100)
   }
 
   const getStatusStyle = (status: HistoryOrderStatus) => {
@@ -193,7 +223,7 @@ const HistoryScreen = () => {
           iconColor: "#F44336",
           icon: "cancel" 
         }
-      case "REPORTED":
+      case "DELAYED":
         return { 
           backgroundColor: "rgba(255, 152, 0, 0.1)", 
           color: "#FF9800",
@@ -249,13 +279,13 @@ const HistoryScreen = () => {
   }
 
   const getStatusPercentage = () => {
-    if (!stats) return { delivered: 0, cancelled: 0, reported: 0 }
+    if (!stats) return { delivered: 0, cancelled: 0, delayed: 0 }
     
     const total = stats.totalOrders || 1
     return {
       delivered: (stats.delivered / total) * 100,
       cancelled: (stats.cancelled / total) * 100,
-      reported: (stats.reported / total) * 100
+      delayed: (stats.delayed / total) * 100
     }
   }
 
@@ -283,9 +313,8 @@ const HistoryScreen = () => {
     )
   }
 
-  // Render skeleton loader for stats card
-  const renderStatsSkeleton = () => {
-    return (
+  const renderStatsCard = () => {
+    if (!stats) return (
       <View style={[styles.statsCard, styles.skeletonStatsCard]}>
         <View style={styles.skeletonStatsGradient}>
           <View style={styles.skeletonStatsHeader}>
@@ -295,7 +324,6 @@ const HistoryScreen = () => {
             </View>
             <View style={styles.skeletonStatsIcon} />
           </View>
-
           <View style={styles.skeletonStatsGrid}>
             <View style={styles.skeletonStatItem}>
               <View style={styles.skeletonStatNumber} />
@@ -312,7 +340,6 @@ const HistoryScreen = () => {
               <View style={styles.skeletonStatLabel} />
             </View>
           </View>
-
           <View style={styles.skeletonProgressContainer}>
             <View style={styles.skeletonProgressBar} />
             <View style={styles.skeletonProgressLabels}>
@@ -324,10 +351,6 @@ const HistoryScreen = () => {
         </View>
       </View>
     )
-  }
-
-  const renderStatsCard = () => {
-    if (!stats) return renderStatsSkeleton()
     
     const percentages = getStatusPercentage()
     
@@ -387,7 +410,7 @@ const HistoryScreen = () => {
                 style={[
                   styles.progressFill, 
                   { 
-                    width: `${percentages.reported}%`,
+                    width: `${percentages.delayed}%`,
                     backgroundColor: '#FF9800'
                   }
                 ]} 
@@ -511,7 +534,7 @@ const HistoryScreen = () => {
                   {item.status === "DELIVERED" ? "Livrée" : 
                    item.status === "CANCELLED" ? "Annulée" : 
                    item.status === "REJECTED" ? "Rejetée" :
-                   item.status === "REPORTED" ? "Signalée" : 
+                   item.status === "DELAYED" ? "Signalée" : 
                    item.status === "ASSIGNED_TO_DELIVERY" ? "Affectée" :
                    item.status === "ACCEPTED" ? "Acceptée" : "En attente"}
                 </Text>
@@ -586,74 +609,6 @@ const HistoryScreen = () => {
     )
   }
 
-  const renderFilterTabs = () => {
-    const filters: FilterStatus[] = ["All", "Delivered", "Cancelled", "Reported"]
-    
-    return (
-      <Animated.View 
-        style={[
-          styles.filterContainer,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
-      >
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-        >
-          {filters.map((status) => {
-            // Get appropriate status for styling based on filter
-            let statusForStyle: HistoryOrderStatus = "DELIVERED"
-            if (status === "Cancelled") statusForStyle = "CANCELLED"
-            if (status === "Reported") statusForStyle = "REPORTED"
-            if (status === "All") statusForStyle = "DELIVERED" // Default for "All" tab
-            
-            const statusConfig = getStatusStyle(statusForStyle)
-            const isActive = filter === status
-            
-            return (
-              <TouchableOpacity
-                key={status}
-                style={[
-                  styles.filterPill,
-                  isActive && { 
-                    backgroundColor: statusConfig.color,
-                    shadowColor: statusConfig.color,
-                    shadowOpacity: 0.3,
-                    shadowRadius: 10,
-                    elevation: 8
-                  },
-                  filterLoading && styles.filterPillDisabled
-                ]}
-                onPress={() => !filterLoading && handleFilterChange(status)}
-                disabled={filterLoading}
-              >
-                <MaterialCommunityIcons 
-                  name={statusConfig.icon} 
-                  size={18} 
-                  color={isActive ? "#FFF" : statusConfig.color} 
-                />
-                <Text style={[
-                  styles.filterPillText,
-                  isActive && styles.filterPillTextActive
-                ]}>
-                  {status === "All" ? "Toutes" : 
-                   status === "Delivered" ? "Livrées" : 
-                   status === "Cancelled" ? "Annulées" : "Signalées"}
-                </Text>
-                {isActive && (
-                  <View style={styles.activeIndicator} />
-                )}
-              </TouchableOpacity>
-            )
-          })}
-        </ScrollView>
-      </Animated.View>
-    )
-  }
 
   const renderFooter = () => {
     if (!loadingMore) return null
@@ -718,16 +673,14 @@ const HistoryScreen = () => {
           <>
             {renderStatsCard()}
             {renderMiniStats()}
-            {renderFilterTabs()}
           </>
         }
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
           filterLoading ? (
-            // Show skeleton loaders when filtering
             <View style={styles.skeletonListContainer}>
               {[1, 2, 3].map((_, index) => (
-                <View key={index} style={styles.skeletonOrderCard}>
+                <View key={index}>
                   {renderOrderSkeleton()}
                 </View>
               ))}
@@ -1143,7 +1096,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
-  // Skeleton styles
   skeletonListContainer: {
     paddingHorizontal: 24,
   },
