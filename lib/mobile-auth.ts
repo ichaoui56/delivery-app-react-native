@@ -1,7 +1,35 @@
 import { DeliveryAttempt } from "@/types/DeliveryAttempt"
-import * as SecureStore from "expo-secure-store"
+import * as ExpoSecureStore from "expo-secure-store"
 
 const TOKEN_KEY = "mobile_jwt"
+
+// Helper functions to work with SecureStore
+const getSecureItem = async (key: string): Promise<string | null> => {
+  try {
+    return await ExpoSecureStore.getItemAsync(key)
+  } catch (error) {
+    console.error('Error getting secure item:', error)
+    return null
+  }
+}
+
+const setSecureItem = async (key: string, value: string): Promise<void> => {
+  try {
+    await ExpoSecureStore.setItemAsync(key, value)
+  } catch (error) {
+    console.error('Error setting secure item:', error)
+    throw error
+  }
+}
+
+const deleteSecureItem = async (key: string): Promise<void> => {
+  try {
+    await ExpoSecureStore.deleteItemAsync(key)
+  } catch (error) {
+    console.error('Error deleting secure item:', error)
+    throw error
+  }
+}
 
 export type DeliveryMan = {
   id: number
@@ -42,15 +70,15 @@ async function readJsonSafe<T>(res: Response): Promise<T | null> {
 }
 
 export async function getAuthToken(): Promise<string | null> {
-  return await SecureStore.getItemAsync(TOKEN_KEY)
+  return await getSecureItem(TOKEN_KEY)
 }
 
 export async function setAuthToken(token: string): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, token)
+  await setSecureItem(TOKEN_KEY, token)
 }
 
 export async function clearAuthToken(): Promise<void> {
-  await SecureStore.deleteItemAsync(TOKEN_KEY)
+  await deleteSecureItem(TOKEN_KEY)
 }
 
 export async function apiSignIn(email: string, password: string): Promise<{ token: string; user: DeliveryManUser }> {

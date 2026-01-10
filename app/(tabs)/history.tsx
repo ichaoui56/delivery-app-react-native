@@ -17,6 +17,7 @@ import {
   Animated,
   Dimensions,
   FlatList,
+  Image,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -25,6 +26,8 @@ import {
   TouchableOpacity,
   View
 } from "react-native"
+import { useRouter } from "expo-router"
+import { CustomTopNav } from "./custom-top-nav"
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
 
@@ -32,7 +35,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window')
 type FilterStatus = "All" | "Delivered" | "Cancelled" | "Delayed" | "PENDING" | "DELIVERED" | "CANCELLED" | "DELAYED"
 
 const HistoryScreen = () => {
-  const { token } = useAuth()
+  const router = useRouter()
+  const { user, token } = useAuth()
   const [filter, setFilter] = useState<FilterStatus>("All")
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -48,6 +52,9 @@ const HistoryScreen = () => {
   const scrollY = useRef(new Animated.Value(0)).current
   const fadeAnim = useRef(new Animated.Value(0)).current
   const slideAnim = useRef(new Animated.Value(50)).current
+
+  const firstName = user?.name?.split(" ")[0] || "Utilisateur"
+  const userCity = user?.deliveryMan?.city || "Ville inconnue"
 
   // Map frontend filter labels to backend status values
   const getBackendStatus = (filter: FilterStatus): HistoryOrderStatus | undefined => {
@@ -623,38 +630,82 @@ const HistoryScreen = () => {
 
   if (loading && orders.length === 0) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2196F3" />
-        <Text style={styles.loadingText}>Chargement de l'historique...</Text>
+      <SafeAreaView style={styles.container}>
+        {/* User info section with CustomTopNav */}
+        <View style={styles.userInfoContainer}>
+          <View style={styles.header}>
+            <View style={styles.userInfo}>
+              {user?.image ? (
+                <Image source={{ uri: user.image }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
+              <View style={styles.userTextInfo}>
+                <Text style={styles.greeting}>Bonjour, {firstName}</Text>
+                <Text style={styles.location}>{userCity}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Top Navigation Bar */}
+          <CustomTopNav
+            activeTab="history"
+            onTabChange={(tab) => {
+              if (tab === "home") {
+                router.push("/(tabs)")
+              } else if (tab === "orders") {
+                router.push("/(tabs)/orders")
+              } else if (tab === "settings") {
+                router.push("/(tabs)/settings")
+              }
+            }}
+          />
+        </View>
+        
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2196F3" />
+          <Text style={styles.loadingText}>Chargement de l'historique...</Text>
+        </View>
       </SafeAreaView>
     )
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <Animated.View 
-        style={[
-          styles.header,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }]
-          }
-        ]}
-      >
-        <View>
-          <Text style={styles.headerTitle}>Historique</Text>
-          <Text style={styles.headerSubtitle}>
-            {orders.length} commande{orders.length !== 1 ? 's' : ''} 
-            {filter !== "All" ? 
-              ` (${filter === "Delivered" ? "livrées" : 
-                filter === "Cancelled" ? "annulées" : 
-                "signalées"})` : ""}
-          </Text>
+      {/* White background section for user info */}
+      <View style={styles.userInfoContainer}>
+        <View style={styles.header}>
+          <View style={styles.userInfo}>
+            {user?.image ? (
+              <Image source={{ uri: user.image }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={styles.userTextInfo}>
+              <Text style={styles.greeting}>Bonjour, {firstName}</Text>
+              <Text style={styles.location}>{userCity}</Text>
+            </View>
+          </View>
         </View>
-        <TouchableOpacity style={styles.headerButton}>
-          <MaterialCommunityIcons name="filter-variant" size={24} color="#2196F3" />
-        </TouchableOpacity>
-      </Animated.View>
+
+        {/* Top Navigation Bar */}
+        <CustomTopNav
+          activeTab="history"
+          onTabChange={(tab) => {
+            if (tab === "home") {
+              router.push("/(tabs)")
+            } else if (tab === "orders") {
+              router.push("/(tabs)/orders")
+            } else if (tab === "settings") {
+              router.push("/(tabs)/settings")
+            }
+          }}
+        />
+      </View>
 
       <FlatList
         data={orders}
@@ -670,10 +721,10 @@ const HistoryScreen = () => {
           />
         }
         ListHeaderComponent={
-          <>
+          <View style={styles.listHeaderContainer}>
             {renderStatsCard()}
             {renderMiniStats()}
-          </>
+          </View>
         }
         ListFooterComponent={renderFooter}
         ListEmptyComponent={
@@ -721,7 +772,68 @@ const HistoryScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#F0F4F8",
+  },
+  userInfoContainer: {
+    backgroundColor: "#FFFFFF",
+    paddingTop: 30,
+    paddingBottom: 10,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 10,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 15,
+  },
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  userTextInfo: {
+    marginLeft: 15,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  avatarPlaceholder: {
+    backgroundColor: "#0f8fd5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarText: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+  },
+  greeting: {
+    color: "#1A1A1A",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 2,
+  },
+  location: {
+    color: "#808080",
+    fontSize: 14,
+  },
+  listHeaderContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 10,
+  },
+  scrollContent: {
+    paddingBottom: 30,
   },
   loadingContainer: {
     flex: 1,
@@ -729,46 +841,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#F8FAFC",
   },
-  scrollContent: {
-    paddingBottom: 30,
-  },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 20,
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#1A1A1A",
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#F0F7FF",
-    justifyContent: "center",
-    alignItems: "center",
-  },
   statsCard: {
-    marginHorizontal: 24,
     marginTop: 8,
     marginBottom: 20,
     borderRadius: 24,
@@ -859,7 +932,6 @@ const styles = StyleSheet.create({
   },
   miniStatsContainer: {
     flexDirection: "row",
-    paddingHorizontal: 24,
     gap: 12,
     marginBottom: 20,
   },
@@ -885,57 +957,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#666",
   },
-  filterContainer: {
-    marginBottom: 20,
-  },
-  filterScrollContent: {
-    paddingHorizontal: 24,
-    gap: 10,
-  },
-  filterPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
-    backgroundColor: "#FFF",
-    gap: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  filterPillDisabled: {
-    opacity: 0.5,
-  },
-  filterPillText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#666",
-  },
-  filterPillTextActive: {
-    color: "#FFF",
-    fontWeight: "700",
-  },
-  activeIndicator: {
-    position: "absolute",
-    bottom: -4,
-    left: "50%",
-    transform: [{ translateX: -4 }],
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#FFF",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
   orderCard: {
     backgroundColor: "#FFF",
-    marginHorizontal: 24,
+    marginHorizontal: 20,
     marginBottom: 16,
     borderRadius: 20,
     padding: 20,
@@ -1059,6 +1083,7 @@ const styles = StyleSheet.create({
   emptyContainer: {
     alignItems: "center",
     padding: 48,
+    marginTop: 20,
   },
   emptyTitle: {
     fontSize: 20,
@@ -1095,9 +1120,11 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     color: "#666",
+    marginTop: 10,
   },
   skeletonListContainer: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
+    marginTop: 20,
   },
   skeletonOrderCard: {
     backgroundColor: "#FFF",

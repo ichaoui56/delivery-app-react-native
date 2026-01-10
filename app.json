@@ -1,28 +1,27 @@
 {
   "expo": {
-    "name": "delivery-man",
-    "slug": "delivery-man",
+    "name": "sonixpress",
+    "slug": "sonixpress",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "deliveryman",
+    "scheme": "sonixpress",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    
-    // ADD THIS FOR ANDROID BUILD
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#184794"
+    },
     "android": {
-      "package": "com.sonicdelivery.deliveryman", // ← REQUIRED: Change to your company name
-      "versionCode": 1, // ← REQUIRED: Increment this for each update
+      "package": "com.sonixpress.deliveryapp",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png",
         "backgroundColor": "#184794"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      
-      // OPTIONAL: Add permissions if your app needs them
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
@@ -31,44 +30,23 @@
         "CAMERA"
       ]
     },
-    
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sonicdelivery.deliveryman" // For future iOS builds
+      "bundleIdentifier": "com.sonicdelivery.deliveryapp"
     },
-    
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
-    
-    // ADD THIS FOR SPLASH SCREEN
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff",
-      "dark": {
-        "image": "./assets/images/splash-icon.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#000000"
-      }
-    },
-    
     "plugins": [
+      "expo-dev-client",
       "expo-router",
       "expo-secure-store"
     ],
-    
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    },
-    
-    // ADD THIS FOR EXTRA CONFIG
     "extra": {
       "eas": {
-        "projectId": "sonic-delivery" // Will be created automatically
-      }
-    }
+        "projectId": "5ef36349-c4f2-418a-8df9-2f431a7de2f1"
+      },
+      "router": {}
+    },
+    "owner": "first05s-organization"
   }
 }
+
+

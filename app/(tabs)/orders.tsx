@@ -16,17 +16,21 @@ import {
     TouchableOpacity,
     View
 } from "react-native"
+import { CustomTopNav } from "./custom-top-nav"
 
 type FilterStatus = "all" | OrderStatus
 
 const OrdersScreen = () => {
   const router = useRouter()
-  const { token } = useAuth()
+  const { user, token } = useAuth()
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+
+  const firstName = user?.name?.split(" ")[0] || "Utilisateur"
+  const userCity = user?.deliveryMan?.city || "Ville inconnue"
 
   useEffect(() => {
     let mounted = true
@@ -78,7 +82,7 @@ const OrdersScreen = () => {
       ASSIGNED_TO_DELIVERY: "Assignée",
       DELIVERED: "Livrée",
       CANCELLED: "Annulée",
-      DELAY: "Signalée",
+      DELAYED: "Signalée",
       REJECTED: "Rejetée",
     }
     return statusMap[status] || status
@@ -95,7 +99,7 @@ const OrdersScreen = () => {
         return { color: "#28a745", icon: "check-circle", bgColor: "#E8F5E9" }
       case "CANCELLED":
       case "REJECTED":
-      case "DELAY":
+      case "DELAYED":
         return { color: "#dc3545", icon: "close-circle", bgColor: "#FDEDED" }
       default:
         return { color: "#666", icon: "help-circle", bgColor: "#F0F0F0" }
@@ -181,11 +185,6 @@ const OrdersScreen = () => {
 
   const ListHeader = () => (
     <>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Toutes les commandes</Text>
-        <Text style={styles.headerSubtitle}>Suivez et gérez vos commandes</Text>
-      </View>
-
       <View style={styles.searchBar}>
         <MaterialCommunityIcons name="magnify" size={20} color="#999" />
         <TextInput
@@ -219,6 +218,39 @@ const OrdersScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* White background section for user info */}
+      <View style={styles.userInfoContainer}>
+        <View style={styles.header}>
+          <View style={styles.userInfo}>
+            {user?.image ? (
+              <Image source={{ uri: user.image }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={styles.userTextInfo}>
+              <Text style={styles.greeting}>Bonjour, {firstName}</Text>
+              <Text style={styles.location}>{userCity}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Top Navigation Bar */}
+        <CustomTopNav
+          activeTab="orders"
+          onTabChange={(tab) => {
+            if (tab === "home") {
+              router.push("/(tabs)")
+            } else if (tab === "history") {
+              router.push("/(tabs)/history")
+            } else if (tab === "settings") {
+              router.push("/(tabs)/settings")
+            }
+          }}
+        />
+      </View>
+
       {loading ? (
         <>
           <ListHeader />
@@ -234,7 +266,13 @@ const OrdersScreen = () => {
           data={filteredOrders}
           renderItem={({ item }) => <OrderCard order={item} />}
           keyExtractor={(item) => String(item.id)}
-          ListHeaderComponent={<ListHeader />}
+          ListHeaderComponent={
+            <View style={styles.listHeaderContainer}>
+              <Text style={styles.sectionTitle}>Toutes les commandes</Text>
+              <Text style={styles.sectionSubtitle}>Suivez et gérez vos commandes</Text>
+              <ListHeader />
+            </View>
+          }
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <MaterialCommunityIcons name="package-variant-closed" size={60} color="#D0D0D0" />
@@ -253,22 +291,76 @@ const OrdersScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: "#F0F4F8",
+  },
+  userInfoContainer: {
+    backgroundColor: "#FFFFFF",
+    paddingTop: 30,
+    paddingBottom: 10,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 10,
   },
   header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 15,
-    paddingBottom: 10,
+    paddingBottom: 15,
   },
-  headerTitle: {
-    fontSize: 28,
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  userTextInfo: {
+    marginLeft: 15,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  avatarPlaceholder: {
+    backgroundColor: "#0f8fd5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarText: {
+    color: "#fff",
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#1A1A1A",
-    marginBottom: 4,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: "#666",
+  greeting: {
+    color: "#1A1A1A",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 2,
+  },
+  location: {
+    color: "#808080",
+    fontSize: 14,
+  },
+  listHeaderContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 10,
+  },
+  sectionTitle: {
+    color: "#1A1A1A",
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 5,
+  },
+  sectionSubtitle: {
+    color: "#808080",
+    fontSize: 14,
+    marginBottom: 15,
   },
   searchBar: {
     flexDirection: "row",
@@ -276,8 +368,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     paddingHorizontal: 15,
     alignItems: "center",
-    marginHorizontal: 20,
-    marginTop: 15,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: "#E0E0E0",
@@ -295,7 +385,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   filterContent: {
-    paddingHorizontal: 20,
     paddingVertical: 10,
     gap: 10,
   },
@@ -320,13 +409,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   ordersGrid: {
-    paddingHorizontal: 20,
     paddingBottom: 20,
   },
   orderCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 15,
+    marginHorizontal: 20,
     marginBottom: 15,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -447,6 +536,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 15,
+    marginHorizontal: 20,
     marginBottom: 15,
     borderWidth: 1,
     borderColor: "#F0F0F0",

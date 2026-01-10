@@ -6,18 +6,19 @@ import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
 import {
-    ActivityIndicator,
-    FlatList,
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native"
 import Svg, { Circle, Path } from "react-native-svg"
+import { CustomTopNav } from "./custom-top-nav"
 
 // --- SVG Icons ---
 const BellIcon = ({ size = 24, color = "#000000" }) => (
@@ -89,7 +90,7 @@ const mapApiStatusToDisplayStatus = (status: ApiOrderStatus): ShipmentStatus => 
       return "Livré"
     case "CANCELLED":
       return "Annulé"
-    case "DELAY":
+    case "DELAYED":
       return "Reporté"
     default:
       return "En attente"
@@ -297,32 +298,51 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.userInfo}>
-          {user?.image ? (
-            <Image source={{ uri: user.image }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
+      {/* White background section for user info */}
+      <View style={styles.userInfoContainer}>
+        <View style={styles.header}>
+          <View style={styles.userInfo}>
+            {user?.image ? (
+              <Image source={{ uri: user.image }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={styles.userTextInfo}>
+              <Text style={styles.greeting}>Bonjour, {firstName}</Text>
+              <Text style={styles.location}>{userCity}</Text>
             </View>
-          )}
-          <View>
-            <Text style={styles.greeting}>Bonjour, {firstName}</Text>
-            <Text style={styles.location}>{userCity}</Text>
+          </View>
+          <View style={styles.headerIcons}>
+            <TouchableOpacity onPress={handleRefresh} disabled={refreshing} style={styles.iconButton}>
+              {refreshing ? (
+                <ActivityIndicator size="small" color={LIGHT_COLORS.primary} />
+              ) : (
+                <RefreshIcon color={LIGHT_COLORS.text} />
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <BellIcon color={LIGHT_COLORS.text} />
+            </TouchableOpacity>
           </View>
         </View>
-        <View style={styles.headerIcons}>
-          <TouchableOpacity onPress={handleRefresh} disabled={refreshing} style={styles.iconButton}>
-            {refreshing ? (
-              <ActivityIndicator size="small" color={LIGHT_COLORS.primary} />
-            ) : (
-              <RefreshIcon color={LIGHT_COLORS.text} />
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <BellIcon color={LIGHT_COLORS.text} />
-          </TouchableOpacity>
-        </View>
+
+        <CustomTopNav
+          activeTab="home"
+          onTabChange={(tab) => {
+            if (tab !== "home") {
+              // Navigate to the corresponding route
+              if (tab === "orders") {
+                router.push("/(tabs)/orders");
+              } else if (tab === "history") {
+                router.push("/(tabs)/history");
+              } else if (tab === "settings") {
+                router.push("/(tabs)/settings");
+              }
+            }
+          }}
+        />
       </View>
 
       {loading ? (
@@ -383,7 +403,7 @@ export default function HomeScreen() {
 
               <View style={styles.recentShipmentHeader}>
                 <Text style={styles.sectionTitle}>Livraisons récentes</Text>
-                <TouchableOpacity onPress={() => router.push("/(tabs)/history")}>
+                <TouchableOpacity onPress={() => router.push("/(tabs)/orders")}>
                   <Text style={styles.viewMore}>Voir plus</Text>
                 </TouchableOpacity>
               </View>
@@ -439,24 +459,38 @@ const createStyles = () => {
       flex: 1,
       backgroundColor: LIGHT_COLORS.background,
     },
+    userInfoContainer: {
+      backgroundColor: "#FFFFFF",
+      paddingTop: 30, // Added top padding
+      paddingBottom: 10,
+      borderBottomLeftRadius: 20,
+      borderBottomRightRadius: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 3,
+      marginBottom: 10,
+    },
     header: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
       paddingHorizontal: 20,
-      paddingTop: 20,
-      paddingBottom: 10,
+      paddingBottom: 15,
     },
     userInfo: {
       flexDirection: "row",
       alignItems: "center",
       flex: 1,
     },
+    userTextInfo: {
+      marginLeft: 15,
+    },
     avatar: {
       width: 50,
       height: 50,
       borderRadius: 25,
-      marginRight: 15,
     },
     avatarPlaceholder: {
       backgroundColor: LIGHT_COLORS.primary,
@@ -492,14 +526,15 @@ const createStyles = () => {
     listHeaderContainer: {
       paddingHorizontal: 20,
       paddingBottom: 10,
+      paddingTop: 10,
     },
     sectionTitle: {
       color: LIGHT_COLORS.text,
       fontSize: 20,
       fontWeight: "bold",
-      marginTop: 20,
       marginBottom: 10,
     },
+
     creativeCard: {
       borderRadius: 20,
       padding: 20,

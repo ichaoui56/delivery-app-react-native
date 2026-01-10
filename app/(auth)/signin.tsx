@@ -201,7 +201,7 @@ export default function SignInScreen() {
                             <View style={styles.logoCircle}>
                                 <Image source={require('../../assets/images/icon.png')} style={styles.logo} />
                             </View>
-                            <Text style={styles.brandText}>Sonic Delivery</Text>
+                            <Text style={styles.brandText}>Sonixpress</Text>
                             <Text style={styles.welcomeText}>Application livreur</Text>
                             <Text style={styles.subtitleText}>Suivez. Livrez. Soyez payé</Text>
                         </View>

@@ -6,7 +6,8 @@ import { Image } from "expo-image"
 import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useState } from "react"
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, TextInput, Alert } from "react-native"
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, TextInput, Alert, Image as RNImage } from "react-native"
+import { CustomTopNav } from "./custom-top-nav"
 
 const SettingsScreen = () => {
   const router = useRouter()
@@ -23,6 +24,9 @@ const SettingsScreen = () => {
     vehicleType: user?.deliveryMan?.vehicleType || "",
     image: user?.image || null
   })
+
+  const firstName = user?.name?.split(" ")[0] || "Utilisateur"
+  const userCity = user?.deliveryMan?.city || "Ville inconnue"
     
   const profileLoading = status === "loading" || avatarLoading
 
@@ -75,8 +79,37 @@ const SettingsScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profil</Text>
+      {/* White background section for user info */}
+      <View style={styles.userInfoContainer}>
+        <View style={styles.header}>
+          <View style={styles.userInfo}>
+            {user?.image ? (
+              <RNImage source={{ uri: user.image }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarText}>{firstName.charAt(0).toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={styles.userTextInfo}>
+              <Text style={styles.greeting}>Bonjour, {firstName}</Text>
+              <Text style={styles.location}>{userCity}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Top Navigation Bar */}
+        <CustomTopNav
+          activeTab="settings"
+          onTabChange={(tab) => {
+            if (tab === "home") {
+              router.push("/(tabs)")
+            } else if (tab === "orders") {
+              router.push("/(tabs)/orders")
+            } else if (tab === "history") {
+              router.push("/(tabs)/history")
+            }
+          }}
+        />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} style={styles.content}>
@@ -299,17 +332,60 @@ const SettingsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#F0F4F8",
+  },
+  userInfoContainer: {
     backgroundColor: "#FFFFFF",
+    paddingTop: 30,
+    paddingBottom: 10,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    marginBottom: 10,
   },
   header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 15,
     paddingBottom: 15,
   },
-  headerTitle: {
-    fontSize: 28,
+  userInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  userTextInfo: {
+    marginLeft: 15,
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+  },
+  avatarPlaceholder: {
+    backgroundColor: "#0f8fd5",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarText: {
+    color: "#fff",
+    fontSize: 20,
     fontWeight: "bold",
+  },
+  greeting: {
     color: "#1A1A1A",
+    fontSize: 18,
+    fontWeight: "bold",
+    marginBottom: 2,
+  },
+  location: {
+    color: "#808080",
+    fontSize: 14,
   },
   content: {
     flex: 1,
