@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error("Not authenticated")
     }
 
-    const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "https://sonic-delivery.up.railway.app"
+    const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "https://dash.sonixpress.ma"
     
     try {
       const response = await fetch(`${baseUrl}/api/mobile/profile`, {

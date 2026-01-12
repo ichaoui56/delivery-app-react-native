@@ -1,7 +1,7 @@
 "use client"
 
 import { useAuth } from "@/lib/auth-provider"
-import { apiLatestOrders, OrderStatus as ApiOrderStatus, getAuthToken, Order } from "@/lib/mobile-auth"
+import { apiLatestOrders, OrderStatus as ApiOrderStatus, Order } from "@/lib/mobile-auth"
 import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
@@ -124,7 +124,7 @@ const getOrderProductNames = (order: Order): string => {
 // --- Main Component ---
 export default function HomeScreen() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, status, token } = useAuth()
   const styles = createStyles()
 
   const [activeFilter, setActiveFilter] = useState<ShipmentStatus>("Tous")
@@ -135,20 +135,37 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null)
 
   const firstName = user?.name?.split(" ")[0] || "Utilisateur"
-  const userCity = user?.deliveryMan?.city || "Ville inconnue"
+  const userCity = (() => {
+    const rawCity = user?.deliveryMan?.city
+    if (!rawCity) return "Ville inconnue"
+    if (typeof rawCity === "string") return rawCity
+    if (typeof rawCity === "object" && "name" in rawCity && typeof (rawCity as any).name === "string") {
+      return (rawCity as any).name
+    }
+    return "Ville inconnue"
+  })()
 
   useEffect(() => {
-    fetchOrders()
-  }, [])
+    if (status !== "signedIn" || !token) {
+      setOrders([])
+      setError(null)
+      setLoading(false)
+      return
+    }
+
+    void fetchOrders()
+  }, [status, token])
 
   const fetchOrders = async () => {
     try {
       setLoading(true)
       setError(null)
-      const token = await getAuthToken()
+
       if (!token) {
-        throw new Error("No authentication token found")
+        setOrders([])
+        return
       }
+
       const response = await apiLatestOrders(token)
       setOrders(response.orders)
     } catch (err) {
@@ -163,10 +180,12 @@ export default function HomeScreen() {
     try {
       setRefreshing(true)
       setError(null)
-      const token = await getAuthToken()
+
       if (!token) {
-        throw new Error("No authentication token found")
+        setOrders([])
+        return
       }
+
       const response = await apiLatestOrders(token)
       setOrders(response.orders)
     } catch (err) {

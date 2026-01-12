@@ -30,7 +30,15 @@ const OrdersScreen = () => {
   const [loading, setLoading] = useState(true)
 
   const firstName = user?.name?.split(" ")[0] || "Utilisateur"
-  const userCity = user?.deliveryMan?.city || "Ville inconnue"
+  const userCity = (() => {
+    const rawCity = user?.deliveryMan?.city
+    if (!rawCity) return "Ville inconnue"
+    if (typeof rawCity === "string") return rawCity
+    if (typeof rawCity === "object" && "name" in rawCity && typeof (rawCity as any).name === "string") {
+      return (rawCity as any).name
+    }
+    return "Ville inconnue"
+  })()
 
   useEffect(() => {
     let mounted = true

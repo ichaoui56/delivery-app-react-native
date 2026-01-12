@@ -2,31 +2,30 @@
 
 import { useAuth } from "@/lib/auth-provider"
 import {
-  apiOrderHistory,
-  apiOrderStats,
-  HistoryOrderStatus,
-  OrderHistory,
-  OrderStatsResponse
+    apiOrderHistory,
+    apiOrderStats,
+    HistoryOrderStatus,
+    OrderHistory,
+    OrderStatsResponse
 } from "@/lib/mobile-auth"
 import { MaterialCommunityIcons } from "@expo/vector-icons"
 import { LinearGradient } from "expo-linear-gradient"
+import { useRouter } from "expo-router"
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  FlatList,
-  Image,
-  RefreshControl,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    FlatList,
+    Image,
+    RefreshControl,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native"
-import { useRouter } from "expo-router"
 import { CustomTopNav } from "./custom-top-nav"
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window')
@@ -54,7 +53,15 @@ const HistoryScreen = () => {
   const slideAnim = useRef(new Animated.Value(50)).current
 
   const firstName = user?.name?.split(" ")[0] || "Utilisateur"
-  const userCity = user?.deliveryMan?.city || "Ville inconnue"
+  const userCity = (() => {
+    const rawCity = user?.deliveryMan?.city
+    if (!rawCity) return "Ville inconnue"
+    if (typeof rawCity === "string") return rawCity
+    if (typeof rawCity === "object" && "name" in rawCity && typeof (rawCity as any).name === "string") {
+      return (rawCity as any).name
+    }
+    return "Ville inconnue"
+  })()
 
   // Map frontend filter labels to backend status values
   const getBackendStatus = (filter: FilterStatus): HistoryOrderStatus | undefined => {
@@ -214,13 +221,15 @@ const HistoryScreen = () => {
   }
 
   const getStatusStyle = (status: HistoryOrderStatus) => {
+    type IconName = keyof typeof MaterialCommunityIcons.glyphMap
+
     switch (status) {
       case "DELIVERED":
         return { 
           backgroundColor: "rgba(76, 175, 80, 0.1)", 
           color: "#4CAF50",
           iconColor: "#4CAF50",
-          icon: "check-circle" 
+          icon: "check-circle" as IconName
         }
       case "CANCELLED":
       case "REJECTED":
@@ -228,42 +237,42 @@ const HistoryScreen = () => {
           backgroundColor: "rgba(244, 67, 54, 0.1)", 
           color: "#F44336",
           iconColor: "#F44336",
-          icon: "cancel" 
+          icon: "cancel" as IconName
         }
       case "DELAYED":
         return { 
           backgroundColor: "rgba(255, 152, 0, 0.1)", 
           color: "#FF9800",
           iconColor: "#FF9800",
-          icon: "alert-circle" 
+          icon: "alert-circle" as IconName
         }
       case "ASSIGNED_TO_DELIVERY":
         return { 
           backgroundColor: "rgba(33, 150, 243, 0.1)", 
           color: "#2196F3",
           iconColor: "#2196F3",
-          icon: "clock" 
+          icon: "clock" as IconName
         }
       case "ACCEPTED":
         return { 
           backgroundColor: "rgba(156, 39, 176, 0.1)", 
           color: "#9C27B0",
           iconColor: "#9C27B0",
-          icon: "check" 
+          icon: "check" as IconName
         }
       case "PENDING":
         return { 
           backgroundColor: "rgba(158, 158, 158, 0.1)", 
           color: "#9E9E9E",
           iconColor: "#9E9E9E",
-          icon: "clock-outline" 
+          icon: "clock-outline" as IconName
         }
       default:
         return { 
           backgroundColor: "#E3F2FD", 
           color: "#757575",
           iconColor: "#757575",
-          icon: "clock" 
+          icon: "clock" as IconName
         }
     }
   }

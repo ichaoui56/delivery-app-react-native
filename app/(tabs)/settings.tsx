@@ -6,7 +6,7 @@ import { Image } from "expo-image"
 import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useState } from "react"
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, TextInput, Alert, Image as RNImage } from "react-native"
+import { Alert, Image as RNImage, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
 import { CustomTopNav } from "./custom-top-nav"
 
 const SettingsScreen = () => {
@@ -26,7 +26,15 @@ const SettingsScreen = () => {
   })
 
   const firstName = user?.name?.split(" ")[0] || "Utilisateur"
-  const userCity = user?.deliveryMan?.city || "Ville inconnue"
+  const userCity = (() => {
+    const rawCity = user?.deliveryMan?.city
+    if (!rawCity) return "Ville inconnue"
+    if (typeof rawCity === "string") return rawCity
+    if (typeof rawCity === "object" && "name" in rawCity && typeof (rawCity as any).name === "string") {
+      return (rawCity as any).name
+    }
+    return "Ville inconnue"
+  })()
     
   const profileLoading = status === "loading" || avatarLoading
 
@@ -159,7 +167,7 @@ const SettingsScreen = () => {
                 <Text style={styles.profileEmail}>{user?.email || ""}</Text>
                 {user?.deliveryMan ? (
                   <Text style={styles.profileMeta}>
-                    {user.deliveryMan.city || ""}
+                    {userCity}
                     {user.deliveryMan.vehicleType ? ` • ${user.deliveryMan.vehicleType}` : ""}
                   </Text>
                 ) : null}
@@ -261,7 +269,7 @@ const SettingsScreen = () => {
               <MaterialCommunityIcons name="map-marker" size={18} color="#666" />
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Ville</Text>
-                <Text style={styles.infoValue}>{user?.deliveryMan?.city || "Non renseigné"}</Text>
+                <Text style={styles.infoValue}>{userCity || "Non renseigné"}</Text>
               </View>
             </View>
             

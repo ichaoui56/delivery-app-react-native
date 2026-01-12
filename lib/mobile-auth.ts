@@ -58,7 +58,7 @@ function getApiBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL
   if (envUrl) return envUrl.replace(/\/$/, "")
 
-  return "https://sonic-delivery.up.railway.app"
+  return "https://dash.sonixpress.ma"
 }
 
 async function readJsonSafe<T>(res: Response): Promise<T | null> {
@@ -251,7 +251,7 @@ export type OrderStatsResponse = {
 export async function apiOrderHistory(
   token: string,
   options?: {
-    status?: "All" | "Delivered" | "Cancelled" | "Delayed" | "DELIVERED" | "CANCELLED" | "DELAYED"
+    status?: HistoryOrderStatus | "All" | "Delivered" | "Cancelled" | "Delayed" | "DELIVERED" | "CANCELLED" | "DELAYED"
     take?: number
     skip?: number
   }
@@ -507,7 +507,7 @@ export async function apiUpdateOrderStatus(
 
 // Add this to your existing API functions in mobile-auth.ts
 export async function apiOrderDeliveryAttempts(token: string, orderId: number): Promise<{ attempts: DeliveryAttempt[] }> {
-  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "https://sonic-delivery.up.railway.app"
+  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "https://dash.sonixpress.ma"
   
   const res = await fetch(`${baseUrl}/api/mobile/orders/${orderId}/attempts`, {
     method: 'GET',

@@ -83,9 +83,6 @@ export const UserInfoHeader: React.FC<UserInfoHeaderProps> = ({
               )}
             </TouchableOpacity>
           )}
-          <TouchableOpacity>
-            <BellIcon color="#1A1A1A" />
-          </TouchableOpacity>
         </View>
       </View>
       

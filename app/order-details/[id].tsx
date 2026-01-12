@@ -142,7 +142,7 @@ const OrderDetailsScreen = () => {
   const getApiBaseUrl = (): string => {
     const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL
     if (envUrl) return envUrl.replace(/\/$/, "")
-    return "https://sonic-delivery.up.railway.app"
+    return "https://dash.sonixpress.ma"
   }
 
   const getStatusAppearance = (status: OrderStatus): { 
