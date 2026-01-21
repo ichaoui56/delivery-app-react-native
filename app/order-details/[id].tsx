@@ -29,6 +29,7 @@ import {
     Platform,
     Keyboard,
     TouchableWithoutFeedback,
+    Linking,
 } from "react-native"
 
 type StatusUpdateModalState = {
@@ -143,6 +144,65 @@ const OrderDetailsScreen = () => {
     const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL
     if (envUrl) return envUrl.replace(/\/$/, "")
     return "https://dash.sonixpress.ma"
+  }
+
+  // Function to make a phone call
+  const handleCallCustomer = async () => {
+    if (!order?.customerPhone) {
+      Alert.alert("Erreur", "Numéro de téléphone non disponible")
+      return
+    }
+
+    const phoneNumber = order.customerPhone.replace(/\s+/g, '')
+    const phoneUrl = `tel:${phoneNumber}`
+
+    try {
+      const canOpen = await Linking.canOpenURL(phoneUrl)
+      if (canOpen) {
+        await Linking.openURL(phoneUrl)
+      } else {
+        Alert.alert("Erreur", "Impossible d'ouvrir l'application téléphone")
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'appel:", error)
+      Alert.alert("Erreur", "Impossible de passer l'appel")
+    }
+  }
+
+  // Function to open WhatsApp
+  const handleOpenWhatsApp = async () => {
+    if (!order?.customerPhone) {
+      Alert.alert("Erreur", "Numéro de téléphone non disponible")
+      return
+    }
+
+    const phoneNumber = order.customerPhone.replace(/\s+/g, '')
+    
+    // Remove leading 0 and add country code if needed
+    let formattedNumber = phoneNumber
+    if (phoneNumber.startsWith('0')) {
+      formattedNumber = '212' + phoneNumber.substring(1) // Morocco country code
+    }
+
+    // Create message with order information
+    const orderInfo = `Bonjour,\n\nInformations sur la commande:\n`
+    const details = `📦 Commande: ${order.orderCode}\n👤 Client: ${order.customerName}\n📍 Adresse: ${order.address}\n💰 Total: MAD ${order.totalPrice.toFixed(2)}\n📅 Date: ${formatDate(order.createdAt)}\n\nMerci !`
+    const message = encodeURIComponent(orderInfo + details)
+    const whatsappUrl = `whatsapp://send?phone=${formattedNumber}&text=${message}`
+
+    try {
+      const canOpen = await Linking.canOpenURL(whatsappUrl)
+      if (canOpen) {
+        await Linking.openURL(whatsappUrl)
+      } else {
+        // If WhatsApp is not installed, try web version
+        const webWhatsappUrl = `https://wa.me/${formattedNumber}?text=${message}`
+        await Linking.openURL(webWhatsappUrl)
+      }
+    } catch (error) {
+      console.error("Erreur lors de l'ouverture de WhatsApp:", error)
+      Alert.alert("Erreur", "Impossible d'ouvrir WhatsApp")
+    }
   }
 
   const getStatusAppearance = (status: OrderStatus): { 
@@ -356,13 +416,14 @@ const OrderDetailsScreen = () => {
 
           {/* Order Info Skeleton */}
           <View style={[styles.section, { marginBottom: 20 }]}>
-            <View style={[styles.skeletonText, { width: 120, height: 20, marginBottom: 16 }]} />
-            {[1, 2, 3].map((i) => (
-              <View key={i} style={styles.skeletonInfoRow}>
-                <View style={[styles.skeletonText, { width: 24, height: 24, borderRadius: 12 }]} />
-                <View style={[styles.skeletonText, { flex: 1, height: 18, marginLeft: 12 }]} />
-              </View>
-            ))}
+            <View style={[styles.skeletonText, { width: 120, height: 20, marginBottom: 16 }]}>
+              {[1, 2, 3].map((i) => (
+                <View key={i} style={styles.skeletonInfoRow}>
+                  <View style={[styles.skeletonText, { width: 24, height: 24, borderRadius: 12 }]} />
+                  <View style={[styles.skeletonText, { flex: 1, height: 18, marginLeft: 12 }]} />
+                </View>
+              ))}
+            </View>
           </View>
 
           {/* Products Skeleton */}
@@ -484,7 +545,28 @@ const OrderDetailsScreen = () => {
         )}
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Client et Livraison</Text>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle}>Client et Livraison</Text>
+            {order.customerPhone && (
+              <View style={styles.contactButtonsContainer}>
+                <TouchableOpacity 
+                  style={styles.contactButton}
+                  onPress={handleCallCustomer}
+                >
+                  <MaterialCommunityIcons name="phone-outline" size={18} color="#FFFFFF" />
+                  <Text style={styles.contactButtonText}>Appeler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.contactButton, styles.whatsappButton]}
+                  onPress={handleOpenWhatsApp}
+                >
+                  <MaterialCommunityIcons name="whatsapp" size={18} color="#FFFFFF" />
+                  <Text style={styles.contactButtonText}>WhatsApp</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+          
           <View style={styles.infoRowVertical}>
             <MaterialCommunityIcons name="account-circle-outline" size={20} color="#0f8fd5" />
             <View>
@@ -496,7 +578,9 @@ const OrderDetailsScreen = () => {
             <MaterialCommunityIcons name="phone-outline" size={20} color="#0f8fd5" />
             <View>
               <Text style={styles.infoLabel}>Téléphone</Text>
-              <Text style={styles.infoValue}>{order.customerPhone}</Text>
+              <TouchableOpacity onPress={handleCallCustomer}>
+                <Text style={[styles.infoValue, styles.phoneNumber]}>{order.customerPhone}</Text>
+              </TouchableOpacity>
             </View>
           </View>
           <View style={styles.infoRowVertical}>
@@ -848,13 +932,35 @@ const styles = StyleSheet.create({
   cardTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  contactButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  contactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#28a745',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  whatsappButton: {
+    backgroundColor: '#25D366',
+  },
+  contactButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#1A1A1A",
+    flex: 1,
   },
   attemptCount: {
     fontSize: 14,
@@ -954,6 +1060,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#1A1A1A",
     fontWeight: '600'
+  },
+  phoneNumber: {
+    color: '#0f8fd5',
+    textDecorationLine: 'underline',
   },
   itemRow: {
     flexDirection: "row",
