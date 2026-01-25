@@ -252,6 +252,8 @@ const OrdersScreen = () => {
               router.push("/(tabs)")
             } else if (tab === "history") {
               router.push("/(tabs)/history")
+            } else if (tab === "finance") {
+              router.push("/(tabs)/finance")
             } else if (tab === "settings") {
               router.push("/(tabs)/settings")
             }
@@ -312,7 +314,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-    marginBottom: 10,
+    marginBottom: 0,
   },
   header: {
     flexDirection: "row",
@@ -358,6 +360,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 10,
     paddingTop: 10,
+    marginTop: 10,
   },
   sectionTitle: {
     color: "#1A1A1A",

@@ -115,6 +115,8 @@ const SettingsScreen = () => {
               router.push("/(tabs)/orders")
             } else if (tab === "history") {
               router.push("/(tabs)/history")
+            } else if (tab === "finance") {
+              router.push("/(tabs)/finance")
             }
           }}
         />
@@ -353,7 +355,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-    marginBottom: 10,
+    marginBottom: 0,
   },
   header: {
     flexDirection: "row",
@@ -410,7 +412,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
-    elevation: 3,
+    marginTop: 10,
   },
   profilePicture: {
     width: 80,

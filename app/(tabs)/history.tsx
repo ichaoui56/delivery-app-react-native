@@ -580,10 +580,6 @@ const HistoryScreen = () => {
                 <MaterialCommunityIcons name="clock-outline" size={14} color="#888" />
                 <Text style={styles.metaText}>{formatTime(item.createdAt)}</Text>
               </View>
-              <View style={styles.metaItem}>
-                <MaterialCommunityIcons name="package-variant" size={14} color="#888" />
-                <Text style={styles.metaText}>{item.itemsCount} pièce{item.itemsCount !== 1 ? 's' : ''}</Text>
-              </View>
             </View>
           </View>
 
@@ -666,6 +662,8 @@ const HistoryScreen = () => {
                 router.push("/(tabs)")
               } else if (tab === "orders") {
                 router.push("/(tabs)/orders")
+              } else if (tab === "finance") {
+                router.push("/(tabs)/finance")
               } else if (tab === "settings") {
                 router.push("/(tabs)/settings")
               }
@@ -709,6 +707,8 @@ const HistoryScreen = () => {
               router.push("/(tabs)")
             } else if (tab === "orders") {
               router.push("/(tabs)/orders")
+            } else if (tab === "finance") {
+              router.push("/(tabs)/finance")
             } else if (tab === "settings") {
               router.push("/(tabs)/settings")
             }
@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
-    marginBottom: 10,
+    marginBottom: 0,
   },
   header: {
     flexDirection: "row",
@@ -840,6 +840,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 10,
     paddingTop: 10,
+    marginTop: 10,
   },
   scrollContent: {
     paddingBottom: 30,

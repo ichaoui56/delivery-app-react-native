@@ -22,6 +22,7 @@ export const CustomTopNav: React.FC<CustomTopNavProps> = ({
     { name: "home", label: "Accueil", icon: "home" as keyof typeof Ionicons.glyphMap },
     { name: "orders", label: "Commandes", icon: "list" as keyof typeof Ionicons.glyphMap },
     { name: "history", label: "Historique", icon: "time" as keyof typeof Ionicons.glyphMap },
+    { name: "finance", label: "Finances", icon: "wallet" as keyof typeof Ionicons.glyphMap },
     { name: "settings", label: "Paramètres", icon: "settings" as keyof typeof Ionicons.glyphMap },
   ]
 
@@ -57,7 +58,7 @@ export const CustomTopNav: React.FC<CustomTopNavProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 10,
     backgroundColor: "#FFFFFF",
   },
   navBar: {
@@ -66,15 +67,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#F8F9FA",
     borderRadius: 15,
-    paddingHorizontal: 15,
+    paddingHorizontal: 10,
     paddingVertical: 8,
   },
   navItem: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
     position: "relative",
+    flex: 1,
+    minWidth: 0,
   },
   activeNavItem: {
     backgroundColor: "#FFFFFF",
@@ -89,7 +92,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   label: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#A0A0A0",
     fontWeight: "500",
   },

@@ -6,16 +6,16 @@ import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useEffect, useState } from "react"
 import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native"
 import Svg, { Circle, Path } from "react-native-svg"
 import { CustomTopNav } from "./custom-top-nav"
@@ -356,6 +356,8 @@ export default function HomeScreen() {
                 router.push("/(tabs)/orders");
               } else if (tab === "history") {
                 router.push("/(tabs)/history");
+              } else if (tab === "finance") {
+                router.push("/(tabs)/finance");
               } else if (tab === "settings") {
                 router.push("/(tabs)/settings");
               }
@@ -489,7 +491,7 @@ const createStyles = () => {
       shadowOpacity: 0.1,
       shadowRadius: 8,
       elevation: 3,
-      marginBottom: 10,
+      marginBottom: 0,
     },
     header: {
       flexDirection: "row",
@@ -546,6 +548,7 @@ const createStyles = () => {
       paddingHorizontal: 20,
       paddingBottom: 10,
       paddingTop: 10,
+      marginTop: 10,
     },
     sectionTitle: {
       color: LIGHT_COLORS.text,

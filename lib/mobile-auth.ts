@@ -512,16 +512,92 @@ export async function apiOrderDeliveryAttempts(token: string, orderId: number): 
   const res = await fetch(`${baseUrl}/api/mobile/orders/${orderId}/attempts`, {
     method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    }
+      'authorization': `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
   })
 
-  const body = await res.json()
-
   if (!res.ok) {
-    throw new Error(body?.error || 'Failed to fetch delivery attempts')
+    throw new Error(`Failed to fetch delivery attempts: ${res.status}`)
   }
 
+  const body = await res.json()
+  return body
+}
+
+// ===== FINANCE FUNCTIONS =====
+export interface CurrentStatus {
+  totalEarned: number
+  pendingEarnings: number
+  collectedCOD: number
+  pendingCOD: number
+  availableBalance: number
+  baseFee: number
+}
+
+export interface Statistics {
+  totalDeliveries: number
+  successfulDeliveries: number
+  codOrdersCount: number
+  totalCODAmount: number
+  totalEarningsFromOrders: number
+  totalTransferred: number
+}
+
+export interface CODOrder {
+  id: number
+  orderCode: string
+  totalPrice: number
+  deliveredAt: string | null
+  customerName: string
+  customerPhone: string
+  address: string
+  merchantName: string
+}
+
+export interface DeliveredOrder {
+  id: number
+  orderCode: string
+  totalPrice: number
+  paymentMethod: "COD" | "PREPAID"
+  deliveredAt: string | null
+  merchantEarning: number
+}
+
+export interface MoneyTransfer {
+  id: number
+  amount: number
+  transferDate: string
+  note: string
+  reference: string | null
+}
+
+export interface FinanceData {
+  currentStatus: CurrentStatus
+  statistics: Statistics
+  recentCODOrders: CODOrder[]
+  recentDeliveredOrders: DeliveredOrder[]
+  moneyTransfers: MoneyTransfer[]
+}
+
+export interface FinanceResponse {
+  success: boolean
+  data: FinanceData
+}
+
+export async function apiFinanceData(token: string): Promise<FinanceResponse> {
+  const res = await fetch(`${getApiBaseUrl()}/api/mobile/finance`, {
+    method: 'GET',
+    headers: {
+      'authorization': `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+  })
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch finance data: ${res.status}`)
+  }
+
+  const body = await res.json()
   return body
 }
