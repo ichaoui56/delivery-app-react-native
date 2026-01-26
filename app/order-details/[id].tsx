@@ -1277,7 +1277,7 @@ const OrderDetailsScreen = () => {
                     {noteModal.content.length}/1000 caractères
                   </Text>
 
-                  <TouchableOpacity
+                  {/* <TouchableOpacity
                     style={[
                       styles.noteModalPrivacyToggle,
                       noteModal.isPrivate && styles.noteModalPrivacyToggleActive
@@ -1289,7 +1289,7 @@ const OrderDetailsScreen = () => {
                       size={20}
                       color={noteModal.isPrivate ? "#FFA500" : "#666"}
                     />
-                    {/* <View style={styles.noteModalPrivacyTextContainer}>
+                    <View style={styles.noteModalPrivacyTextContainer}>
                       <Text style={[
                         styles.noteModalPrivacyText,
                         noteModal.isPrivate && styles.noteModalPrivacyTextActive
@@ -1301,8 +1301,8 @@ const OrderDetailsScreen = () => {
                           ? "Seulement vous pouvez voir cette note"
                           : "Tous les livreurs peuvent voir cette note"}
                       </Text>
-                    </View> */}
-                  </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity> */}
                 </View>
 
                 <View style={styles.noteModalFooter}>
