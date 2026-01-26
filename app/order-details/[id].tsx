@@ -1,36 +1,41 @@
 "use client"
 
 import {
-    apiAcceptOrder,
-    apiOrderDetails,
-    apiUpdateOrderStatus,
-    getAuthToken,
-    Order,
-    OrderStatus,
-    UpdateOrderStatusRequest,
+  apiAcceptOrder,
+  apiCreateOrderNote,
+  apiDeleteOrderNote,
+  apiGetOrderNotes,
+  apiOrderDetails,
+  apiUpdateOrderStatus,
+  CreateNoteRequest,
+  DeliveryNote,
+  getAuthToken,
+  Order,
+  OrderStatus,
+  UpdateOrderStatusRequest,
 } from "@/lib/mobile-auth"
 import { MaterialCommunityIcons } from "@expo/vector-icons"
 import { LinearGradient } from "expo-linear-gradient"
 import { useLocalSearchParams, useRouter } from "expo-router"
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Modal,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-    KeyboardAvoidingView,
-    Platform,
-    Keyboard,
-    TouchableWithoutFeedback,
-    Linking,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
 } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
 
 type StatusUpdateModalState = {
   visible: boolean
@@ -51,6 +56,13 @@ type DeliveryAttempt = {
   location: string | null
 }
 
+type NoteModalState = {
+  visible: boolean
+  content: string
+  isPrivate: boolean
+  isSubmitting: boolean
+}
+
 const COMMON_REASONS = [
   "Client non disponible",
   "Client ne répond pas",
@@ -63,23 +75,36 @@ const COMMON_REASONS = [
 const OrderDetailsScreen = () => {
   const { id } = useLocalSearchParams()
   const router = useRouter()
+
+  // States
   const [statusModal, setStatusModal] = useState<StatusUpdateModalState>({
     visible: false,
     selectedStatus: null,
     reason: "",
     commonReason: "",
   })
+
+  const [noteModal, setNoteModal] = useState<NoteModalState>({
+    visible: false,
+    content: "",
+    isPrivate: false,
+    isSubmitting: false,
+  })
+
   const [order, setOrder] = useState<Order | null>(null)
   const [deliveryAttempts, setDeliveryAttempts] = useState<DeliveryAttempt[]>([])
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [cachedOrders, setCachedOrders] = useState<Record<number, Order>>({})
-  
+  const [isRefreshingNotes, setIsRefreshingNotes] = useState(false)
+
   // Refs for keyboard handling
   const scrollViewRef = useRef<ScrollView>(null)
   const reasonInputRef = useRef<TextInput>(null)
+  const noteInputRef = useRef<TextInput>(null)
 
   useEffect(() => {
     const orderId = Number.parseInt(Array.isArray(id) ? id[0] : id, 10)
@@ -110,23 +135,44 @@ const OrderDetailsScreen = () => {
       if (!Number.isFinite(orderId)) {
         throw new Error("ID de commande invalide")
       }
+
+      // Fetch order details
       const response = await apiOrderDetails(token, orderId)
       setOrder(response.order)
-      
-      // Fetch delivery attempts
-      const attemptsResponse = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/attempts`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+
+      // Set notes from order response if available
+      if (response.order.deliveryNotes) {
+        setDeliveryNotes(response.order.deliveryNotes)
+      } else {
+        // Try to fetch notes separately if not included in order response
+        try {
+          const notesData = await apiGetOrderNotes(token, orderId)
+          setDeliveryNotes(notesData.notes || [])
+        } catch (err) {
+          console.error("Error fetching notes:", err)
+          // If API fails, set empty array
+          setDeliveryNotes([])
         }
-      })
-      
-      if (attemptsResponse.ok) {
-        const attemptsData = await attemptsResponse.json()
-        setDeliveryAttempts(attemptsData.attempts || [])
       }
-      
+
+      // Fetch delivery attempts
+      try {
+        const attemptsResponse = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/attempts`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (attemptsResponse.ok) {
+          const attemptsData = await attemptsResponse.json()
+          setDeliveryAttempts(attemptsData.attempts || [])
+        }
+      } catch (err) {
+        console.error("Error fetching attempts:", err)
+      }
+
       setCachedOrders(prev => ({
         ...prev,
         [orderId]: response.order
@@ -137,6 +183,16 @@ const OrderDetailsScreen = () => {
     } finally {
       setIsLoading(false)
       setIsInitialLoad(false)
+    }
+  }
+
+
+  const fetchDeliveryNotes = async (token: string, orderId: number) => {
+    try {
+      const notesData = await apiGetOrderNotes(token, orderId)
+      setDeliveryNotes(notesData.notes || [])
+    } catch (err) {
+      console.error("Error fetching notes:", err)
     }
   }
 
@@ -177,7 +233,7 @@ const OrderDetailsScreen = () => {
     }
 
     const phoneNumber = order.customerPhone.replace(/\s+/g, '')
-    
+
     // Remove leading 0 and add country code if needed
     let formattedNumber = phoneNumber
     if (phoneNumber.startsWith('0')) {
@@ -205,56 +261,56 @@ const OrderDetailsScreen = () => {
     }
   }
 
-  const getStatusAppearance = (status: OrderStatus): { 
-    label: string; 
-    color: string; 
-    icon: keyof typeof MaterialCommunityIcons.glyphMap; 
-    gradient: readonly string[] 
+  const getStatusAppearance = (status: OrderStatus): {
+    label: string;
+    color: string;
+    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    gradient: readonly string[]
   } => {
     switch (status) {
       case "PENDING":
-        return { 
-          label: "En attente", 
-          color: "#FFA500", 
-          icon: "clock-outline", 
-          gradient: ["#FFF7E6", "#FFF2D9"] as const 
+        return {
+          label: "En attente",
+          color: "#FFA500",
+          icon: "clock-outline",
+          gradient: ["#FFF7E6", "#FFF2D9"] as const
         }
       case "ACCEPTED":
       case "ASSIGNED_TO_DELIVERY":
-        return { 
-          label: "Assignée", 
-          color: "#0f8fd5", 
-          icon: "truck-fast", 
-          gradient: ["#E3F2FD", "#EBF5FF"] as const 
+        return {
+          label: "Assignée",
+          color: "#0f8fd5",
+          icon: "truck-fast",
+          gradient: ["#E3F2FD", "#EBF5FF"] as const
         }
       case "DELAYED":
-        return { 
-          label: "Retardée", 
-          color: "#FFA500", 
-          icon: "clock-alert-outline", 
-          gradient: ["#FFF7E6", "#FFE4B5"] as const 
+        return {
+          label: "Retardée",
+          color: "#FFA500",
+          icon: "clock-alert-outline",
+          gradient: ["#FFF7E6", "#FFE4B5"] as const
         }
       case "DELIVERED":
-        return { 
-          label: "Livrée", 
-          color: "#28a745", 
-          icon: "check-circle", 
-          gradient: ["#E8F5E9", "#E0F0E3"] as const 
+        return {
+          label: "Livrée",
+          color: "#28a745",
+          icon: "check-circle",
+          gradient: ["#E8F5E9", "#E0F0E3"] as const
         }
       case "CANCELLED":
       case "REJECTED":
-        return { 
-          label: "Annulée", 
-          color: "#dc3545", 
-          icon: "close-circle", 
-          gradient: ["#FDEDED", "#FBEBEB"] as const 
+        return {
+          label: "Annulée",
+          color: "#dc3545",
+          icon: "close-circle",
+          gradient: ["#FDEDED", "#FBEBEB"] as const
         }
       default:
-        return { 
-          label: status, 
-          color: "#666", 
-          icon: "help-circle", 
-          gradient: ["#F0F0F0", "#E8E8E8"] as const 
+        return {
+          label: status,
+          color: "#666",
+          icon: "help-circle",
+          gradient: ["#F0F0F0", "#E8E8E8"] as const
         }
     }
   }
@@ -328,20 +384,20 @@ const OrderDetailsScreen = () => {
   const handleStatusChange = (status: "DELAYED" | "REJECTED" | "CANCELLED" | "DELIVERED") => {
     setStatusModal(prev => ({ ...prev, selectedStatus: status }))
   }
-  
+
   const handleCommonReasonChange = (reason: string) => {
-    setStatusModal(prev => ({ 
-      ...prev, 
-      commonReason: reason, 
-      reason: reason === "Autre" ? "" : reason 
+    setStatusModal(prev => ({
+      ...prev,
+      commonReason: reason,
+      reason: reason === "Autre" ? "" : reason
     }))
   }
-  
+
   const handleReasonChange = (reason: string) => {
-    setStatusModal(prev => ({ 
-      ...prev, 
-      reason, 
-      commonReason: prev.commonReason === reason ? prev.commonReason : "Autre" 
+    setStatusModal(prev => ({
+      ...prev,
+      reason,
+      commonReason: prev.commonReason === reason ? prev.commonReason : "Autre"
     }))
   }
 
@@ -371,7 +427,7 @@ const OrderDetailsScreen = () => {
       await apiUpdateOrderStatus(token, order.id, updateData)
       await fetchOrderDetails()
       handleCloseStatusModal()
-      
+
       // Show appropriate success message
       if (statusModal.selectedStatus === "DELAYED") {
         Alert.alert("Succès", "Retard enregistré. La commande reste en cours de livraison.")
@@ -385,17 +441,158 @@ const OrderDetailsScreen = () => {
     }
   }
 
+  // Note Functions
+  const handleOpenNoteModal = () => {
+    setNoteModal({
+      visible: true,
+      content: "",
+      isPrivate: false,
+      isSubmitting: false,
+    })
+    setTimeout(() => {
+      noteInputRef.current?.focus()
+    }, 300)
+  }
+
+  const handleCloseNoteModal = () => {
+    setNoteModal({
+      visible: false,
+      content: "",
+      isPrivate: false,
+      isSubmitting: false,
+    })
+    Keyboard.dismiss()
+  }
+
+  const handleCreateNote = async () => {
+    if (!order || !noteModal.content.trim()) return
+
+    try {
+      setNoteModal(prev => ({ ...prev, isSubmitting: true }))
+      const token = await getAuthToken()
+      if (!token) throw new Error("Aucun jeton d'authentification trouvé")
+
+      const noteData: CreateNoteRequest = {
+        content: noteModal.content.trim(),
+        isPrivate: noteModal.isPrivate,
+      }
+
+      const response = await apiCreateOrderNote(token, order.id, noteData)
+
+      // Add new note to the beginning of the list
+      const newNote = {
+        ...response.note,
+        deliveryMan: {
+          user: {
+            id: response.note.deliveryMan.user.id,
+            name: response.note.deliveryMan.user.name,
+            image: response.note.deliveryMan.user.image
+          }
+        }
+      }
+
+      setDeliveryNotes(prev => [newNote, ...prev])
+
+      handleCloseNoteModal()
+      Alert.alert("Succès", "Note ajoutée avec succès")
+    } catch (err) {
+      console.error("Create note error:", err)
+      Alert.alert("Erreur", err instanceof Error ? err.message : "Échec de l'ajout de la note")
+    } finally {
+      setNoteModal(prev => ({ ...prev, isSubmitting: false }))
+    }
+  }
+
+  const handleDeleteNote = async (noteId: number) => {
+    if (!order) return
+
+    Alert.alert(
+      "Supprimer la note",
+      "Êtes-vous sûr de vouloir supprimer cette note ? Cette action est irréversible.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const token = await getAuthToken()
+              if (!token) throw new Error("Aucun jeton d'authentification trouvé")
+
+              await apiDeleteOrderNote(token, order.id, noteId)
+
+              // Remove note from the list
+              setDeliveryNotes(prev => prev.filter(note => note.id !== noteId))
+
+              Alert.alert("Succès", "Note supprimée avec succès")
+            } catch (err) {
+              Alert.alert("Erreur", err instanceof Error ? err.message : "Échec de la suppression")
+            }
+          }
+        }
+      ]
+    )
+  }
+
+  const refreshNotes = async () => {
+    if (!order) return
+
+    try {
+      setIsRefreshingNotes(true)
+      const token = await getAuthToken()
+      if (!token) throw new Error("Aucun jeton d'authentification trouvé")
+
+      await fetchDeliveryNotes(token, order.id)
+    } catch (err) {
+      console.error("Error refreshing notes:", err)
+    } finally {
+      setIsRefreshingNotes(false)
+    }
+  }
+
+  const formatNoteDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      const now = new Date()
+      const diffMs = now.getTime() - date.getTime()
+      const diffMins = Math.floor(diffMs / 60000)
+      const diffHours = Math.floor(diffMs / 3600000)
+      const diffDays = Math.floor(diffMs / 86400000)
+
+      if (diffMins < 1) return "À l'instant"
+      if (diffMins < 60) return `Il y a ${diffMins} min`
+      if (diffHours < 24) return `Il y a ${diffHours} h`
+      if (diffDays < 7) return `Il y a ${diffDays} j`
+
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    } catch (error) {
+      return "Date inconnue"
+    }
+  }
+
   const isFinalStatus = order ? ["REJECTED", "CANCELLED", "DELIVERED"].includes(order.status) : false
   const canAcceptOrder = order?.status === "ACCEPTED"
   // Can update status if assigned to delivery OR if it's already delayed (to allow more attempts)
   const canUpdateStatus = order?.status === "ASSIGNED_TO_DELIVERY" || order?.status === "DELAYED"
 
+  // In your OrderDetailsScreen component, update the skeleton loading section:
   if (isLoading && isInitialLoad) {
     return (
       <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <MaterialCommunityIcons name="arrow-left" size={24} color="#1A1A1A" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Chargement...</Text>
+          <View style={styles.headerPlaceholder} />
+        </View>
         <ScrollView contentContainerStyle={styles.content}>
-          {/* Header Skeleton */}
-          <View style={[styles.header, { marginBottom: 20 }]}>
+          {/* Status Card Skeleton */}
+          <View style={[styles.statusCard, { marginBottom: 20 }]}>
             <View style={styles.skeletonHeader}>
               <View style={styles.skeletonIcon} />
               <View>
@@ -405,30 +602,24 @@ const OrderDetailsScreen = () => {
             </View>
           </View>
 
-          {/* Status Card Skeleton */}
-          <View style={[styles.statusCard, { marginBottom: 20 }]}>
-            <View style={[styles.skeletonText, { width: '70%', height: 22, marginBottom: 16 }]} />
-            <View style={styles.skeletonProgressBar}>
-              <View style={[styles.skeletonProgressFill, { width: '60%' }]} />
-            </View>
-            <View style={[styles.skeletonText, { width: '50%', height: 18, marginTop: 12 }]} />
-          </View>
-
           {/* Order Info Skeleton */}
           <View style={[styles.section, { marginBottom: 20 }]}>
-            <View style={[styles.skeletonText, { width: 120, height: 20, marginBottom: 16 }]}>
-              {[1, 2, 3].map((i) => (
-                <View key={i} style={styles.skeletonInfoRow}>
-                  <View style={[styles.skeletonText, { width: 24, height: 24, borderRadius: 12 }]} />
-                  <View style={[styles.skeletonText, { flex: 1, height: 18, marginLeft: 12 }]} />
-                </View>
-              ))}
+            <View style={{ marginBottom: 16 }}>
+              <View style={[styles.skeletonText, { width: 120, height: 20 }]} />
             </View>
+            {[1, 2, 3].map((i) => (
+              <View key={i} style={styles.skeletonInfoRow}>
+                <View style={[styles.skeletonText, { width: 24, height: 24, borderRadius: 12 }]} />
+                <View style={[styles.skeletonText, { flex: 1, height: 18, marginLeft: 12 }]} />
+              </View>
+            ))}
           </View>
 
           {/* Products Skeleton */}
           <View style={styles.section}>
-            <View style={[styles.skeletonText, { width: 100, height: 20, marginBottom: 16 }]} />
+            <View style={{ marginBottom: 16 }}>
+              <View style={[styles.skeletonText, { width: 100, height: 20 }]} />
+            </View>
             {[1, 2].map((i) => (
               <View key={i} style={[styles.skeletonProductCard, { marginBottom: 12 }]}>
                 <View style={[styles.skeletonImage, { width: 60, height: 60, borderRadius: 8 }]} />
@@ -462,8 +653,119 @@ const OrderDetailsScreen = () => {
       </SafeAreaView>
     )
   }
-  
+
   const { label: statusLabel, color: statusColor, icon: statusIcon, gradient: statusGradient } = getStatusAppearance(order.status);
+
+  // Notes Section Component
+  const NotesSection = () => {
+    const getAuthorName = (note: DeliveryNote) => {
+      if (note.deliveryMan?.user?.name) {
+        return note.deliveryMan.user.name
+      }
+      return "Livreur"
+    }
+
+    const getAuthorImage = (note: DeliveryNote) => {
+      return note.deliveryMan?.user?.image || undefined
+    }
+
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardTitleRow}>
+          <Text style={styles.cardTitle}>Notes</Text>
+          <View style={styles.notesHeaderActions}>
+            <TouchableOpacity
+              onPress={refreshNotes}
+              disabled={isRefreshingNotes}
+              style={styles.refreshNotesButton}
+            >
+              <MaterialCommunityIcons
+                name="refresh"
+                size={20}
+                color={isRefreshingNotes ? "#999" : "#0f8fd5"}
+              />
+            </TouchableOpacity>
+            {!isFinalStatus && (
+              <TouchableOpacity
+                style={styles.addNoteButton}
+                onPress={handleOpenNoteModal}
+              >
+                <MaterialCommunityIcons name="plus" size={18} color="#FFFFFF" />
+                <Text style={styles.addNoteButtonText}>Ajouter</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {deliveryNotes.length === 0 ? (
+          <View style={styles.emptyNotesContainer}>
+            <MaterialCommunityIcons name="note-text-outline" size={40} color="#E0E0E0" />
+            <Text style={styles.emptyNotesText}>Aucune note pour cette commande</Text>
+            <Text style={styles.emptyNotesSubText}>
+              Ajoutez des notes pour garder une trace des détails importants
+            </Text>
+            {!isFinalStatus && (
+              <TouchableOpacity
+                style={styles.addFirstNoteButton}
+                onPress={handleOpenNoteModal}
+              >
+                <MaterialCommunityIcons name="plus" size={18} color="#FFFFFF" />
+                <Text style={styles.addFirstNoteButtonText}>Ajouter une note</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={styles.notesList}>
+            {deliveryNotes.map((note) => (
+              <View key={note.id} style={styles.noteCard}>
+                <View style={styles.noteHeader}>
+                  <View style={styles.noteAuthor}>
+                    <View style={styles.avatarContainer}>
+                      {getAuthorImage(note) ? (
+                        <Image
+                          source={{ uri: getAuthorImage(note) }}
+                          style={styles.avatar}
+                        />
+                      ) : (
+                        <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                          <Text style={styles.avatarText}>
+                            {getAuthorName(note).charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.authorInfo}>
+                      <Text style={styles.authorName}>{getAuthorName(note)}</Text>
+                      <Text style={styles.noteTime}>{formatNoteDate(note.createdAt)}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.noteActions}>
+                    {note.isPrivate && (
+                      <View style={styles.privateBadge}>
+                        <MaterialCommunityIcons
+                          name="lock-outline"
+                          size={14}
+                          color="#FFA500"
+                        />
+                        <Text style={styles.privateText}>Privée</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      onPress={() => handleDeleteNote(note.id)}
+                      style={styles.deleteNoteButton}
+                    >
+                      <MaterialCommunityIcons name="delete-outline" size={20} color="#dc3545" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={styles.noteContent}>{note.content}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    )
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -475,12 +777,15 @@ const OrderDetailsScreen = () => {
         <View style={styles.headerPlaceholder} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         ref={scrollViewRef}
-        contentContainerStyle={styles.scrollContainer} 
+        contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Notes Section at the TOP */}
+        <NotesSection />
+
         <LinearGradient colors={statusGradient} style={styles.statusCard}>
           <View style={styles.statusHeader}>
             <View style={[styles.statusIconContainer, { backgroundColor: statusColor }]}>
@@ -516,25 +821,25 @@ const OrderDetailsScreen = () => {
                       </Text>
                     </View>
                   </View>
-                  
+
                   <Text style={styles.attemptTime}>
                     {formatTime(attempt.attemptedAt)} - {formatDate(attempt.attemptedAt)}
                   </Text>
-                  
+
                   {attempt.reason && (
                     <View style={styles.attemptReasonContainer}>
                       <MaterialCommunityIcons name="message-text-outline" size={16} color="#666" />
                       <Text style={styles.attemptReasonText}>{attempt.reason}</Text>
                     </View>
                   )}
-                  
+
                   {attempt.notes && (
                     <View style={styles.attemptNotesContainer}>
                       <MaterialCommunityIcons name="note-text-outline" size={16} color="#666" />
                       <Text style={styles.attemptNotesText}>{attempt.notes}</Text>
                     </View>
                   )}
-                  
+
                   {index < deliveryAttempts.length - 1 && (
                     <View style={styles.attemptDivider} />
                   )}
@@ -549,14 +854,14 @@ const OrderDetailsScreen = () => {
             <Text style={styles.cardTitle}>Client et Livraison</Text>
             {order.customerPhone && (
               <View style={styles.contactButtonsContainer}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.contactButton}
                   onPress={handleCallCustomer}
                 >
                   <MaterialCommunityIcons name="phone-outline" size={18} color="#FFFFFF" />
                   <Text style={styles.contactButtonText}>Appeler</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.contactButton, styles.whatsappButton]}
                   onPress={handleOpenWhatsApp}
                 >
@@ -566,7 +871,7 @@ const OrderDetailsScreen = () => {
               </View>
             )}
           </View>
-          
+
           <View style={styles.infoRowVertical}>
             <MaterialCommunityIcons name="account-circle-outline" size={20} color="#0f8fd5" />
             <View>
@@ -587,7 +892,11 @@ const OrderDetailsScreen = () => {
             <MaterialCommunityIcons name="map-marker-outline" size={20} color="#0f8fd5" />
             <View>
               <Text style={styles.infoLabel}>Adresse</Text>
-              <Text style={styles.infoValue}>{order.address}, {order.city}</Text>
+              <Text style={styles.infoValue}>
+                {order.address}
+                {order.city && typeof order.city === 'object' && (order.city as any).name && `, ${(order.city as any).name}`}
+                {order.city && typeof order.city === 'string' && `, ${order.city}`}
+              </Text>
             </View>
           </View>
         </View>
@@ -638,9 +947,9 @@ const OrderDetailsScreen = () => {
       {!isFinalStatus && (
         <View style={styles.footer}>
           {canAcceptOrder && (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.acceptButton]} 
-              onPress={handleAcceptOrder} 
+            <TouchableOpacity
+              style={[styles.actionButton, styles.acceptButton]}
+              onPress={handleAcceptOrder}
               disabled={actionLoading}
             >
               {actionLoading ? (
@@ -651,9 +960,9 @@ const OrderDetailsScreen = () => {
             </TouchableOpacity>
           )}
           {canUpdateStatus && (
-            <TouchableOpacity 
-              style={[styles.actionButton, styles.updateStatusButton]} 
-              onPress={handleOpenStatusModal} 
+            <TouchableOpacity
+              style={[styles.actionButton, styles.updateStatusButton]}
+              onPress={handleOpenStatusModal}
               disabled={actionLoading}
             >
               <Text style={styles.actionButtonText}>
@@ -664,12 +973,13 @@ const OrderDetailsScreen = () => {
         </View>
       )}
 
-      <Modal 
-        visible={statusModal.visible} 
-        transparent 
+      {/* Status Update Modal */}
+      <Modal
+        visible={statusModal.visible}
+        transparent
         animationType="slide"
       >
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalContainer}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
@@ -677,26 +987,26 @@ const OrderDetailsScreen = () => {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <ScrollView 
+                <ScrollView
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                   contentContainerStyle={styles.modalScrollContent}
                 >
                   <Text style={styles.modalTitle}>Changer le statut</Text>
-                  
+
                   <View style={styles.statusSelector}>
                     {/* Option RETARD */}
-                    <TouchableOpacity
-                      style={[ 
-                        styles.statusOption, 
+                    {/* <TouchableOpacity
+                      style={[
+                        styles.statusOption,
                         statusModal.selectedStatus === "DELAYED" && styles.statusOptionSelected,
                         styles.delayedOption
                       ]}
                       onPress={() => handleStatusChange("DELAYED")}
                     >
-                      <MaterialCommunityIcons 
-                        name="clock-alert-outline" 
-                        size={24} 
+                      <MaterialCommunityIcons
+                        name="clock-alert-outline"
+                        size={24}
                         color={statusModal.selectedStatus === "DELAYED" ? "#FFA500" : "#666"}
                       />
                       <Text style={[
@@ -705,20 +1015,20 @@ const OrderDetailsScreen = () => {
                       ]}>
                         Retard
                       </Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
 
                     {/* Option LIVRÉE */}
                     <TouchableOpacity
-                      style={[ 
-                        styles.statusOption, 
+                      style={[
+                        styles.statusOption,
                         statusModal.selectedStatus === "DELIVERED" && styles.statusOptionSelected,
                         styles.deliveredOption
                       ]}
                       onPress={() => handleStatusChange("DELIVERED")}
                     >
-                      <MaterialCommunityIcons 
-                        name="check-circle-outline" 
-                        size={24} 
+                      <MaterialCommunityIcons
+                        name="check-circle-outline"
+                        size={24}
                         color={statusModal.selectedStatus === "DELIVERED" ? "#28a745" : "#666"}
                       />
                       <Text style={[
@@ -731,16 +1041,16 @@ const OrderDetailsScreen = () => {
 
                     {/* Option ANNULÉE */}
                     <TouchableOpacity
-                      style={[ 
-                        styles.statusOption, 
+                      style={[
+                        styles.statusOption,
                         statusModal.selectedStatus === "CANCELLED" && styles.statusOptionSelected,
                         styles.cancelledOption
                       ]}
                       onPress={() => handleStatusChange("CANCELLED")}
                     >
-                      <MaterialCommunityIcons 
-                        name="cancel" 
-                        size={24} 
+                      <MaterialCommunityIcons
+                        name="cancel"
+                        size={24}
                         color={statusModal.selectedStatus === "CANCELLED" ? "#dc3545" : "#666"}
                       />
                       <Text style={[
@@ -763,60 +1073,60 @@ const OrderDetailsScreen = () => {
                   )}
 
                   {/* Champ de raison pour RETARD et ANNULÉE */}
-                  {statusModal.selectedStatus && 
-                   statusModal.selectedStatus !== "DELIVERED" && (
-                    <View>
-                      <Text style={styles.modalLabel}>
-                        Raison {statusModal.selectedStatus === "DELAYED" ? "(pour le retard)" : "(pour l'annulation)"}
-                      </Text>
-                      <View style={styles.commonReasonsContainer}>
-                        {COMMON_REASONS.map((reason) => (
-                          <TouchableOpacity
-                            key={reason}
-                            style={[ 
-                              styles.commonReasonButton, 
-                              statusModal.commonReason === reason && styles.commonReasonButtonSelected,
-                              statusModal.selectedStatus === "DELAYED" && styles.delayReasonButton
-                            ]}
-                            onPress={() => {
-                              handleCommonReasonChange(reason)
-                              setTimeout(() => {
-                                reasonInputRef.current?.focus()
-                              }, 100)
-                            }}
-                          >
-                            <Text style={[ 
-                              styles.commonReasonText, 
-                              statusModal.commonReason === reason && styles.commonReasonTextSelected 
-                            ]}>
-                              {reason}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                      <TextInput
-                        ref={reasonInputRef}
-                        style={[
-                          styles.reasonInput,
-                          statusModal.selectedStatus === "DELAYED" && styles.delayReasonInput
-                        ]}
-                        placeholder={
-                          statusModal.selectedStatus === "DELAYED" 
-                            ? "Expliquez pourquoi le client n'est pas disponible..." 
-                            : "Expliquez pourquoi la commande doit être annulée..."
-                        }
-                        value={statusModal.reason}
-                        onChangeText={handleReasonChange}
-                        multiline
-                        blurOnSubmit={false}
-                        onSubmitEditing={() => {
-                          if (canSubmitStatusUpdate()) {
-                            handleSubmitStatusUpdate()
+                  {statusModal.selectedStatus &&
+                    statusModal.selectedStatus !== "DELIVERED" && (
+                      <View>
+                        <Text style={styles.modalLabel}>
+                          Raison {statusModal.selectedStatus === "DELAYED" ? "(pour le retard)" : "(pour l'annulation)"}
+                        </Text>
+                        <View style={styles.commonReasonsContainer}>
+                          {COMMON_REASONS.map((reason) => (
+                            <TouchableOpacity
+                              key={reason}
+                              style={[
+                                styles.commonReasonButton,
+                                statusModal.commonReason === reason && styles.commonReasonButtonSelected,
+                                statusModal.selectedStatus === "DELAYED" && styles.delayReasonButton
+                              ]}
+                              onPress={() => {
+                                handleCommonReasonChange(reason)
+                                setTimeout(() => {
+                                  reasonInputRef.current?.focus()
+                                }, 100)
+                              }}
+                            >
+                              <Text style={[
+                                styles.commonReasonText,
+                                statusModal.commonReason === reason && styles.commonReasonTextSelected
+                              ]}>
+                                {reason}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                        <TextInput
+                          ref={reasonInputRef}
+                          style={[
+                            styles.reasonInput,
+                            statusModal.selectedStatus === "DELAYED" && styles.delayReasonInput
+                          ]}
+                          placeholder={
+                            statusModal.selectedStatus === "DELAYED"
+                              ? "Expliquez pourquoi le client n'est pas disponible..."
+                              : "Expliquez pourquoi la commande doit être annulée..."
                           }
-                        }}
-                      />
-                    </View>
-                  )}
+                          value={statusModal.reason}
+                          onChangeText={handleReasonChange}
+                          multiline
+                          blurOnSubmit={false}
+                          onSubmitEditing={() => {
+                            if (canSubmitStatusUpdate()) {
+                              handleSubmitStatusUpdate()
+                            }
+                          }}
+                        />
+                      </View>
+                    )}
                 </ScrollView>
 
                 <View style={styles.modalFooter}>
@@ -824,8 +1134,8 @@ const OrderDetailsScreen = () => {
                     <Text style={styles.modalButtonTextCancel}>Annuler</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[ 
-                      styles.modalButtonSubmit, 
+                    style={[
+                      styles.modalButtonSubmit,
                       (!canSubmitStatusUpdate() || actionLoading) && styles.modalButtonSubmitDisabled,
                       statusModal.selectedStatus === "DELAYED" && styles.delaySubmitButton
                     ]}
@@ -838,6 +1148,105 @@ const OrderDetailsScreen = () => {
                       <Text style={styles.modalButtonTextSubmit}>
                         {statusModal.selectedStatus === "DELAYED" ? "Enregistrer le retard" : "Confirmer"}
                       </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Note Creation Modal */}
+      <Modal
+        visible={noteModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseNoteModal}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.noteModalContainer}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.noteModalOverlay}>
+              <View style={styles.noteModalDialog}>
+                <View style={styles.noteModalHeader}>
+                  <Text style={styles.noteModalTitle}>Ajouter une note</Text>
+                  <TouchableOpacity
+                    onPress={handleCloseNoteModal}
+                    style={styles.noteModalCloseButton}
+                  >
+                    <MaterialCommunityIcons name="close" size={24} color="#666" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.noteModalBody}>
+                  <Text style={styles.modalLabel}>Contenu de la note</Text> {/* Add Text component */}
+                  <TextInput
+                    ref={noteInputRef}
+                    style={styles.noteModalInput}
+                    placeholder="Écrivez votre note ici... (ex: Client demande une livraison après 18h)"
+                    value={noteModal.content}
+                    onChangeText={(text) => setNoteModal(prev => ({ ...prev, content: text }))}
+                    multiline
+                    textAlignVertical="top"
+                    maxLength={1000}
+                    autoFocus={true}
+                  />
+                  <Text style={styles.noteModalCharCount}>
+                    {noteModal.content.length}/1000 caractères
+                  </Text>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.noteModalPrivacyToggle,
+                      noteModal.isPrivate && styles.noteModalPrivacyToggleActive
+                    ]}
+                    onPress={() => setNoteModal(prev => ({ ...prev, isPrivate: !prev.isPrivate }))}
+                  >
+                    <MaterialCommunityIcons
+                      name={noteModal.isPrivate ? "lock" : "lock-open-outline"}
+                      size={20}
+                      color={noteModal.isPrivate ? "#FFA500" : "#666"}
+                    />
+                    <View style={styles.noteModalPrivacyTextContainer}>
+                      <Text style={[
+                        styles.noteModalPrivacyText,
+                        noteModal.isPrivate && styles.noteModalPrivacyTextActive
+                      ]}>
+                        Note privée
+                      </Text>
+                      <Text style={styles.noteModalPrivacySubText}>
+                        {noteModal.isPrivate
+                          ? "Seulement vous pouvez voir cette note"
+                          : "Tous les livreurs peuvent voir cette note"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.noteModalFooter}>
+                  <TouchableOpacity
+                    style={styles.noteModalButtonCancel}
+                    onPress={handleCloseNoteModal}
+                    disabled={noteModal.isSubmitting}
+                  >
+                    <Text style={styles.noteModalButtonTextCancel}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.noteModalButtonSubmit,
+                      (!noteModal.content.trim() || noteModal.isSubmitting) && styles.noteModalButtonSubmitDisabled
+                    ]}
+                    onPress={handleCreateNote}
+                    disabled={!noteModal.content.trim() || noteModal.isSubmitting}
+                  >
+                    {noteModal.isSubmitting ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={styles.noteModalButtonTextSubmit}>Enregistrer</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -934,6 +1343,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  notesHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshNotesButton: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F0F0F0',
+  },
+  addNoteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#28a745',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+  },
+  addNoteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   contactButtonsContainer: {
     flexDirection: 'row',
@@ -1204,6 +1637,17 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     maxHeight: '90%',
   },
+  noteModalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '85%',
+  },
+  noteModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+  },
   modalScrollContent: {
     padding: 24,
     paddingBottom: 120,
@@ -1452,6 +1896,305 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "bold",
+  },
+
+  // Note Section Styles
+  emptyNotesContainer: {
+    alignItems: 'center',
+    paddingVertical: 30,
+    paddingHorizontal: 20,
+  },
+  emptyNotesText: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 16,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  emptyNotesSubText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  addFirstNoteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#28a745',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+  },
+  addFirstNoteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  notesList: {
+    gap: 12,
+  },
+  noteCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  noteHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  noteAuthor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 10,
+  },
+  avatarContainer: {
+    width: 36,
+    height: 36,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarPlaceholder: {
+    backgroundColor: '#0f8fd5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  authorInfo: {
+    flex: 1,
+  },
+  authorName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  noteTime: {
+    fontSize: 12,
+    color: '#666',
+  },
+  noteActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  privateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7E6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  privateText: {
+    fontSize: 11,
+    color: '#FFA500',
+    fontWeight: '600',
+  },
+  deleteNoteButton: {
+    padding: 4,
+  },
+  noteContent: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+
+  // Note Modal Styles
+  noteModalScroll: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  noteInput: {
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 150,
+    fontSize: 16,
+    textAlignVertical: 'top',
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
+  charCount: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+    marginBottom: 20,
+  },
+  privacyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    borderRadius: 12,
+    marginBottom: 24,
+    gap: 12,
+  },
+  privacyToggleActive: {
+    backgroundColor: '#FFF7E6',
+    borderColor: '#FFE4B5',
+  },
+  privacyTextContainer: {
+    flex: 1,
+  },
+  privacyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  privacyTextActive: {
+    color: '#FFA500',
+  },
+  privacySubText: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  noteModalContainer: {
+    flex: 1,
+  },
+  noteModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  noteModalDialog: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    width: "100%",
+    maxWidth: 500,
+    maxHeight: "80%",
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  noteModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9ECEF',
+  },
+  noteModalCloseButton: {
+    padding: 4,
+  },
+  noteModalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
+  },
+  noteModalInput: {
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 150,
+    fontSize: 16,
+    textAlignVertical: 'top',
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
+  noteModalCharCount: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+    marginBottom: 20,
+  },
+  noteModalPrivacyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+    borderRadius: 12,
+    marginBottom: 20,
+    gap: 12,
+  },
+  noteModalPrivacyToggleActive: {
+    backgroundColor: '#FFF7E6',
+    borderColor: '#FFE4B5',
+  },
+  noteModalPrivacyTextContainer: {
+    flex: 1,
+  },
+  noteModalPrivacyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 2,
+  },
+  noteModalPrivacyTextActive: {
+    color: '#FFA500',
+  },
+  noteModalPrivacySubText: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  noteModalFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E9ECEF',
+    backgroundColor: '#FFFFFF',
+  },
+  noteModalButtonCancel: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 15,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center'
+  },
+  noteModalButtonSubmit: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 15,
+    backgroundColor: '#28a745',
+    alignItems: 'center'
+  },
+  noteModalButtonSubmitDisabled: {
+    opacity: 0.5,
+  },
+  noteModalButtonTextCancel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#666'
+  },
+  noteModalButtonTextSubmit: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF'
   },
 })
 

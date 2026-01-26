@@ -169,6 +169,24 @@ type DeliveryManInfo = {
   user: UserInfo
 }
 
+// Delivery Note Types
+export type DeliveryNote = {
+  id: number
+  orderId: number
+  deliveryManId: number
+  content: string
+  isPrivate: boolean
+  createdAt: string
+  updatedAt: string
+  deliveryMan: {
+    user: {
+      id: number
+      name: string
+      image: string | null
+    }
+  }
+}
+
 export interface Order {
   id: number
   orderCode: string
@@ -193,6 +211,7 @@ export interface Order {
   deliveredAt: string | null
   updatedAt: string
   orderItems: OrderItem[]
+  deliveryNotes?: DeliveryNote[]  // Added delivery notes
   merchant?: Merchant
   deliveryMan?: DeliveryManInfo
 }
@@ -202,7 +221,6 @@ export type OrdersResponse = {
 }
 
 // ===== HISTORY TYPES =====
-// UPDATED: Removed DELAY, added DELAYED
 export type HistoryOrderStatus = 'PENDING' | 'ACCEPTED' | 'ASSIGNED_TO_DELIVERY' | 'DELIVERED' | 'CANCELLED' | 'DELAYED' | 'REJECTED'
 
 export type OrderHistory = {
@@ -238,13 +256,171 @@ export type OrderStatsResponse = {
     totalOrders: number
     delivered: number
     cancelled: number
-    delayed: number // UPDATED: Changed from DELAY to delayed
+    delayed: number
     totalEarnings: number
     avgDeliveryTime: string
     successRate: number
     currentStreak: number
     month: string
   }
+}
+
+// ===== DELIVERY NOTES TYPES & FUNCTIONS =====
+export type NotesResponse = {
+  notes: DeliveryNote[]
+}
+
+export type CreateNoteRequest = {
+  content: string
+  isPrivate?: boolean
+}
+
+export type CreateNoteResponse = {
+  success: boolean
+  message: string
+  note: DeliveryNote
+}
+
+export type DeleteNoteResponse = {
+  success: boolean
+  message: string
+}
+
+export type UpdateNoteRequest = {
+  content: string
+  isPrivate?: boolean
+}
+
+export type UpdateNoteResponse = {
+  success: boolean
+  message: string
+  note: DeliveryNote
+}
+
+// In mobile-auth.ts, update the apiGetOrderNotes function:
+export async function apiGetOrderNotes(token: string, orderId: number): Promise<NotesResponse> {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/note`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    // First, check if we got HTML instead of JSON
+    const contentType = res.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await res.text()
+      console.error('Received non-JSON response:', text.substring(0, 200))
+
+      // Check if this is an HTML error page
+      if (text.includes('<html') || text.includes('<!DOCTYPE')) {
+        throw new Error('Server returned HTML instead of JSON. Check if the endpoint exists.')
+      }
+
+      throw new Error(`Expected JSON but got ${contentType || 'unknown content type'}`)
+    }
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      const errorMessage = data?.error || data?.message || `Server returned status ${res.status}`
+      throw new Error(errorMessage)
+    }
+
+    // Handle different response structures
+    if (data.notes !== undefined) {
+      return { notes: data.notes }
+    } else if (Array.isArray(data)) {
+      return { notes: data }
+    } else if (data.note) {
+      return { notes: [data.note] }
+    } else {
+      // Default to empty array
+      console.warn('Unexpected response structure:', data)
+      return { notes: [] }
+    }
+  } catch (error) {
+    console.error('Error in apiGetOrderNotes:', error)
+    // Return empty notes instead of throwing to prevent breaking the UI
+    return { notes: [] }
+  }
+}
+
+// Similarly update apiCreateOrderNote:
+export async function apiCreateOrderNote(
+  token: string,
+  orderId: number,
+  data: CreateNoteRequest
+): Promise<CreateNoteResponse> {
+  try {
+    const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/note`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(data)
+    })
+
+    // Check content type
+    const contentType = res.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await res.text()
+      console.error('Received non-JSON response for create note:', text.substring(0, 200))
+      throw new Error('Server returned non-JSON response')
+    }
+
+    const responseData = await res.json()
+
+    if (!res.ok) {
+      const errorMessage = responseData?.error || responseData?.message || `Failed to create note (${res.status})`
+      throw new Error(errorMessage)
+    }
+
+    // Handle response
+    if (responseData.success !== undefined && responseData.note) {
+      return {
+        success: responseData.success,
+        message: responseData.message || 'Note added successfully',
+        note: responseData.note
+      }
+    } else if (responseData.id) {
+      return {
+        success: true,
+        message: 'Note added successfully',
+        note: responseData
+      }
+    } else {
+      console.warn('Unexpected create note response:', responseData)
+      throw new Error('Invalid response from server')
+    }
+  } catch (error) {
+    console.error('Error in apiCreateOrderNote:', error)
+    throw error
+  }
+}
+
+export async function apiDeleteOrderNote(
+  token: string,
+  orderId: number,
+  noteId: number
+): Promise<DeleteNoteResponse> {
+  const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/note/${noteId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Failed to delete note' }))
+    throw new Error(error.error || 'Failed to delete note')
+  }
+
+  return res.json()
 }
 
 // ===== HISTORY FUNCTIONS =====
@@ -264,11 +440,10 @@ export async function apiOrderHistory(
     const statusMap: Record<string, string> = {
       "Delivered": "DELIVERED",
       "Cancelled": "CANCELLED",
-      "Delayed": "DELAYED", // UPDATED: Changed from DELAY to Delayed
-      // Keep uppercase as is
+      "Delayed": "DELAYED",
       "DELIVERED": "DELIVERED",
       "CANCELLED": "CANCELLED",
-      "DELAYED": "DELAYED" // UPDATED
+      "DELAYED": "DELAYED"
     }
 
     if (statusParam !== "All") {
@@ -443,7 +618,6 @@ export async function apiAcceptOrder(token: string, orderId: number): Promise<Ac
   return body
 }
 
-// UPDATED: Removed DELAY, added DELAYED
 export type UpdateOrderStatusRequest = {
   status: 'DELAYED' | 'REJECTED' | 'CANCELLED' | 'DELIVERED'
   reason?: string
@@ -505,10 +679,9 @@ export async function apiUpdateOrderStatus(
   throw new Error('Invalid update order status response')
 }
 
-// Add this to your existing API functions in mobile-auth.ts
 export async function apiOrderDeliveryAttempts(token: string, orderId: number): Promise<{ attempts: DeliveryAttempt[] }> {
   const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || "https://dash.sonixpress.ma"
-  
+
   const res = await fetch(`${baseUrl}/api/mobile/orders/${orderId}/attempts`, {
     method: 'GET',
     headers: {
@@ -600,4 +773,65 @@ export async function apiFinanceData(token: string): Promise<FinanceResponse> {
 
   const body = await res.json()
   return body
+}
+
+
+export async function apiUpdateOrderNote(
+  token: string, 
+  orderId: number, 
+  noteId: number,
+  data: UpdateNoteRequest
+): Promise<UpdateNoteResponse> {
+  const url = `${getApiBaseUrl()}/api/mobile/orders/${orderId}/note/${noteId}`
+  
+  try {
+    console.log(`📝 Updating note at: ${url}`)
+    
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(data)
+    })
+
+    console.log(`📊 Update note status: ${res.status}`)
+    
+    // Check if response is JSON
+    const contentType = res.headers.get('content-type')
+    
+    if (!contentType || !contentType.includes('application/json')) {
+      const text = await res.text()
+      console.log(`⚠️ Update note returned HTML, text preview: ${text.substring(0, 100)}`)
+      throw new Error('Le serveur n\'a pas pu mettre à jour la note.')
+    }
+
+    const responseData = await res.json()
+    
+    if (!res.ok) {
+      const errorMessage = responseData?.error || responseData?.message || 'Échec de la mise à jour de la note'
+      throw new Error(errorMessage)
+    }
+
+    // Handle response
+    if (responseData.success !== undefined && responseData.note) {
+      return {
+        success: responseData.success,
+        message: responseData.message || 'Note mise à jour avec succès',
+        note: responseData.note
+      }
+    } else if (responseData.id) {
+      return {
+        success: true,
+        message: 'Note mise à jour avec succès',
+        note: responseData
+      }
+    } else {
+      throw new Error('Réponse invalide du serveur')
+    }
+  } catch (error) {
+    console.error('Error updating note:', error)
+    throw error
+  }
 }

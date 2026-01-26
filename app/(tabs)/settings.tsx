@@ -6,7 +6,8 @@ import { Image } from "expo-image"
 import { LinearGradient } from "expo-linear-gradient"
 import { useRouter } from "expo-router"
 import { useState } from "react"
-import { Alert, Image as RNImage, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
+import { Alert, Image as RNImage, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
 import { CustomTopNav } from "./custom-top-nav"
 
 const SettingsScreen = () => {

@@ -405,8 +405,14 @@ export default function FinanceScreen() {
             <View style={styles.statusCardsContainer}>
               <StatusCard
                 icon={<CashIcon size={20} color="#FFFFFF" />}
-                title="Solde Disponible"
-                value={formatCurrency(financeData.currentStatus.availableBalance)}
+                title="COD En Attente"
+                value={formatCurrency(financeData.currentStatus.pendingCOD)}
+                color={LIGHT_COLORS.warning}
+              />
+              <StatusCard
+                icon={<WalletIcon size={20} color="#FFFFFF" />}
+                title="COD Collecté"
+                value={formatCurrency(financeData.currentStatus.collectedCOD)}
                 color={LIGHT_COLORS.success}
               />
               <StatusCard
@@ -414,12 +420,6 @@ export default function FinanceScreen() {
                 title="Gains Totaux"
                 value={formatCurrency(financeData.currentStatus.totalEarned)}
                 color={LIGHT_COLORS.primary}
-              />
-              <StatusCard
-                icon={<WalletIcon size={20} color="#FFFFFF" />}
-                title="COD Collecté"
-                value={formatCurrency(financeData.currentStatus.collectedCOD)}
-                color={LIGHT_COLORS.warning}
               />
               <StatusCard
                 icon={<StatsIcon size={20} color="#FFFFFF" />}
@@ -435,7 +435,7 @@ export default function FinanceScreen() {
               <View style={styles.statsGrid}>
                 <StatCard
                   icon={<Ionicons name="cube" size={20} color={LIGHT_COLORS.primary} />}
-                  label="Total Livraisons"
+                  label="Total  Livraisons"
                   value={financeData.statistics.totalDeliveries}
                   iconColor={LIGHT_COLORS.primary}
                   bgColor={LIGHT_COLORS.primaryLight}
@@ -469,11 +469,11 @@ export default function FinanceScreen() {
                   bgColor={LIGHT_COLORS.successLight}
                 />
                 <StatCard
-                  icon={<Ionicons name="swap-horizontal" size={20} color={LIGHT_COLORS.error} />}
-                  label="Total Transféré"
-                  value={financeData.statistics.totalTransferred}
-                  iconColor={LIGHT_COLORS.error}
-                  bgColor={LIGHT_COLORS.errorLight}
+                  icon={<Ionicons name="card" size={20} color={LIGHT_COLORS.success} />}
+                  label="Commandes Prépayées"
+                  value={financeData.statistics.totalDeliveries - financeData.statistics.codOrdersCount}
+                  iconColor={LIGHT_COLORS.success}
+                  bgColor={LIGHT_COLORS.successLight}
                 />
               </View>
             </View>
