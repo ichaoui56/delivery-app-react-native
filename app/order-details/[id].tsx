@@ -12,7 +12,7 @@ import {
   getAuthToken,
   Order,
   OrderStatus,
-  UpdateOrderStatusRequest,
+  UpdateOrderStatusRequest
 } from "@/lib/mobile-auth"
 import { MaterialCommunityIcons } from "@expo/vector-icons"
 import { LinearGradient } from "expo-linear-gradient"
@@ -61,6 +61,8 @@ type NoteModalState = {
   content: string
   isPrivate: boolean
   isSubmitting: boolean
+  isEditing: boolean
+  editingNoteId: number | null
 }
 
 const COMMON_REASONS = [
@@ -89,6 +91,8 @@ const OrderDetailsScreen = () => {
     content: "",
     isPrivate: false,
     isSubmitting: false,
+    isEditing: false,
+    editingNoteId: null,
   })
 
   const [order, setOrder] = useState<Order | null>(null)
@@ -448,6 +452,8 @@ const OrderDetailsScreen = () => {
       content: "",
       isPrivate: false,
       isSubmitting: false,
+      isEditing: false,
+      editingNoteId: null,
     })
     setTimeout(() => {
       noteInputRef.current?.focus()
@@ -460,8 +466,24 @@ const OrderDetailsScreen = () => {
       content: "",
       isPrivate: false,
       isSubmitting: false,
+      isEditing: false,
+      editingNoteId: null,
     })
     Keyboard.dismiss()
+  }
+
+  const handleOpenEditNoteModal = (note: DeliveryNote) => {
+    setNoteModal({
+      visible: true,
+      content: note.content,
+      isPrivate: note.isPrivate,
+      isSubmitting: false,
+      isEditing: true,
+      editingNoteId: note.id,
+    })
+    setTimeout(() => {
+      noteInputRef.current?.focus()
+    }, 300)
   }
 
   const handleCreateNote = async () => {
@@ -498,6 +520,54 @@ const OrderDetailsScreen = () => {
     } catch (err) {
       console.error("Create note error:", err)
       Alert.alert("Erreur", err instanceof Error ? err.message : "Échec de l'ajout de la note")
+    } finally {
+      setNoteModal(prev => ({ ...prev, isSubmitting: false }))
+    }
+  }
+
+  const handleUpdateNote = async () => {
+    if (!order || !noteModal.content.trim() || !noteModal.editingNoteId) return
+
+    try {
+      setNoteModal(prev => ({ ...prev, isSubmitting: true }))
+      const token = await getAuthToken()
+      if (!token) throw new Error("Aucun jeton d'authentification trouvé")
+
+      const noteData: CreateNoteRequest = {
+        content: noteModal.content.trim(),
+        isPrivate: noteModal.isPrivate,
+      }
+
+      // Direct API call to avoid import issues
+      const url = `${getApiBaseUrl()}/api/mobile/orders/${order.id}/note/${noteModal.editingNoteId}`
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(noteData)
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData?.error || errorData?.message || 'Échec de la mise à jour de la note')
+      }
+
+      const responseData = await res.json()
+      
+      // Update the note in the list
+      setDeliveryNotes(prev => prev.map(note => 
+        note.id === noteModal.editingNoteId 
+          ? { ...responseData.note || responseData, deliveryMan: note.deliveryMan }
+          : note
+      ))
+
+      handleCloseNoteModal()
+      Alert.alert("Succès", "Note mise à jour avec succès")
+    } catch (err) {
+      console.error("Update note error:", err)
+      Alert.alert("Erreur", err instanceof Error ? err.message : "Échec de la mise à jour de la note")
     } finally {
       setNoteModal(prev => ({ ...prev, isSubmitting: false }))
     }
@@ -750,6 +820,12 @@ const OrderDetailsScreen = () => {
                         <Text style={styles.privateText}>Privée</Text>
                       </View>
                     )}
+                    <TouchableOpacity
+                      onPress={() => handleOpenEditNoteModal(note)}
+                      style={styles.editNoteButton}
+                    >
+                      <MaterialCommunityIcons name="pencil-outline" size={20} color="#0f8fd5" />
+                    </TouchableOpacity>
                     <TouchableOpacity
                       onPress={() => handleDeleteNote(note.id)}
                       style={styles.deleteNoteButton}
@@ -1173,7 +1249,9 @@ const OrderDetailsScreen = () => {
             <View style={styles.noteModalOverlay}>
               <View style={styles.noteModalDialog}>
                 <View style={styles.noteModalHeader}>
-                  <Text style={styles.noteModalTitle}>Ajouter une note</Text>
+                  <Text style={styles.noteModalTitle}>
+                    {noteModal.isEditing ? "Modifier la note" : "Ajouter une note"}
+                  </Text>
                   <TouchableOpacity
                     onPress={handleCloseNoteModal}
                     style={styles.noteModalCloseButton}
@@ -1211,7 +1289,7 @@ const OrderDetailsScreen = () => {
                       size={20}
                       color={noteModal.isPrivate ? "#FFA500" : "#666"}
                     />
-                    <View style={styles.noteModalPrivacyTextContainer}>
+                    {/* <View style={styles.noteModalPrivacyTextContainer}>
                       <Text style={[
                         styles.noteModalPrivacyText,
                         noteModal.isPrivate && styles.noteModalPrivacyTextActive
@@ -1223,7 +1301,7 @@ const OrderDetailsScreen = () => {
                           ? "Seulement vous pouvez voir cette note"
                           : "Tous les livreurs peuvent voir cette note"}
                       </Text>
-                    </View>
+                    </View> */}
                   </TouchableOpacity>
                 </View>
 
@@ -1240,13 +1318,15 @@ const OrderDetailsScreen = () => {
                       styles.noteModalButtonSubmit,
                       (!noteModal.content.trim() || noteModal.isSubmitting) && styles.noteModalButtonSubmitDisabled
                     ]}
-                    onPress={handleCreateNote}
+                    onPress={noteModal.isEditing ? handleUpdateNote : handleCreateNote}
                     disabled={!noteModal.content.trim() || noteModal.isSubmitting}
                   >
                     {noteModal.isSubmitting ? (
                       <ActivityIndicator color="#FFFFFF" size="small" />
                     ) : (
-                      <Text style={styles.noteModalButtonTextSubmit}>Enregistrer</Text>
+                      <Text style={styles.noteModalButtonTextSubmit}>
+                        {noteModal.isEditing ? "Mettre à jour" : "Ajouter"}
+                      </Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -2007,6 +2087,10 @@ const styles = StyleSheet.create({
   },
   deleteNoteButton: {
     padding: 4,
+  },
+  editNoteButton: {
+    padding: 4,
+    marginRight: 8,
   },
   noteContent: {
     fontSize: 14,

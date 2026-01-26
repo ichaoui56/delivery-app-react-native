@@ -637,18 +637,18 @@ export type UpdateOrderStatusResponse = {
 }
 
 export async function apiUpdateOrderStatus(
-  token: string,
-  orderId: number,
-  data: UpdateOrderStatusRequest
+token: string,
+orderId: number,
+data: UpdateOrderStatusRequest
 ): Promise<UpdateOrderStatusResponse> {
-  const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/status`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify(data)
-  })
+const res = await fetch(`${getApiBaseUrl()}/api/mobile/orders/${orderId}/status`, {
+method: 'PATCH',
+headers: {
+'Content-Type': 'application/json',
+'Authorization': `Bearer ${token}`
+},
+body: JSON.stringify(data)
+})
 
   const body = await readJsonSafe<ApiErrorBody & UpdateOrderStatusResponse>(res)
 
